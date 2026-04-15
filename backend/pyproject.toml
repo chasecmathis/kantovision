@@ -1,0 +1,25 @@
+[project]
+name = "kantovision-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "supabase>=2.4.0",
+    "PyJWT>=2.8.0",
+    "pydantic-settings>=2.2.0",
+]
+
+[tool.fastapi]
+app = "app.main:app"
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.4.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

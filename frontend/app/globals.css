@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;500;600;700;900&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap");
+
+:root {
+  --font-unbounded: "Unbounded", sans-serif;
+  --font-jetbrains: "JetBrains Mono", monospace;
+  --font-dm-sans: "DM Sans", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #080810;
+  color: #e8e6ff;
+  font-family: var(--font-dm-sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0e0e1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1c1c30;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6c63ff44;
+}
+
+/* Selection */
+::selection {
+  background: rgba(108, 99, 255, 0.3);
+  color: #e8e6ff;
+}
+
+/* Type badge base */
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-family: var(--font-unbounded);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+}
+
+/* Animated background grid */
+.bg-grid {
+  background-image: linear-gradient(rgba(108, 99, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108, 99, 255, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Glow effects */
+.glow-accent {
+  box-shadow: 0 0 20px rgba(108, 99, 255, 0.15), 0 0 60px rgba(108, 99, 255, 0.05);
+}
+
+.glow-type {
+  box-shadow: 0 0 20px var(--type-color, rgba(108, 99, 255, 0.3));
+}
+
+/* Card hover */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Stat bar */
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  width: var(--stat-width, 0%);
+  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Noise overlay */
+.noise::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.025;
+  z-index: 9999;
+}
+
+/* Poke ID number style */
+.poke-id {
+  font-family: var(--font-jetbrains);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: #4a4870;
+}
+
+/* Loading shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #0e0e1a 25%,
+    #141426 50%,
+    #0e0e1a 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

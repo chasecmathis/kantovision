@@ -1,0 +1,14 @@
+# Python
+.venv/
+__pycache__/
+
+# Next
+.next/
+node_modules/
+
+# AI
+.claude/
+
+# Env
+.env
+.env.local
