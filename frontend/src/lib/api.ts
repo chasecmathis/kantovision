@@ -248,3 +248,7 @@ export interface BattleHistoryItem {
 export function getBattleHistory(): Promise<BattleHistoryItem[]> {
   return request<BattleHistoryItem[]>("/battles/history");
 }
+
+export function fetchWsTicket(): Promise<{ ticket: string }> {
+  return request<{ ticket: string }>("/ws/ticket", { method: "POST" });
+}

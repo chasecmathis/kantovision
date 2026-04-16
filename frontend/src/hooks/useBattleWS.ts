@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useRef, useState } from "react";
 import { supabase } from "@/src/lib/supabase";
+import { fetchWsTicket } from "@/src/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ export function useBattleWS() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [endInfo, setEndInfo] = useState<BattleEndInfo | null>(null);
   const [waitingForOpponent, setWaitingForOpponent] = useState(false);
+  const [opponentDisconnected, setOpponentDisconnected] = useState(false);
 
   // Keep a stable ref to battleId for use in closures
   const battleIdRef = useRef<string | null>(null);
@@ -94,6 +96,23 @@ export function useBattleWS() {
         setLog((msg.state as ClientBattleState).log ?? []);
         setPhase("active");
         setWaitingForOpponent(false);
+        break;
+
+      case "battle_resumed":
+        setBattleState(msg.state as ClientBattleState);
+        setBattleId(msg.battle_id as string);
+        battleIdRef.current = msg.battle_id as string;
+        setLog((msg.state as ClientBattleState).log ?? []);
+        setPhase("active");
+        setOpponentDisconnected(false);
+        break;
+
+      case "opponent_disconnected":
+        setOpponentDisconnected(true);
+        break;
+
+      case "opponent_reconnected":
+        setOpponentDisconnected(false);
         break;
 
       case "move_received":
@@ -126,18 +145,26 @@ export function useBattleWS() {
     reconnectAttempted.current = false;
 
     const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
     const userId = data.session?.user?.id ?? null;
 
-    if (!token) {
+    if (!userId) {
       setPhase("idle");
       return;
     }
 
     setMyUserId(userId);
 
+    let ticket: string;
+    try {
+      const result = await fetchWsTicket();
+      ticket = result.ticket;
+    } catch {
+      setPhase("idle");
+      return;
+    }
+
     const wsBase = process.env.NEXT_PUBLIC_API_WS_URL ?? "ws://localhost:8000";
-    const ws = new WebSocket(`${wsBase}/ws/battle?token=${encodeURIComponent(token)}`);
+    const ws = new WebSocket(`${wsBase}/ws/battle?ticket=${encodeURIComponent(ticket)}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -197,6 +224,7 @@ export function useBattleWS() {
     setLog([]);
     setEndInfo(null);
     setWaitingForOpponent(false);
+    setOpponentDisconnected(false);
   }, []);
 
   return {
@@ -207,6 +235,7 @@ export function useBattleWS() {
     myUserId,
     endInfo,
     waitingForOpponent,
+    opponentDisconnected,
     connect,
     joinQueue,
     leaveQueue,

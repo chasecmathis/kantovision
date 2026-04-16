@@ -5,6 +5,7 @@ __pycache__/
 # Next
 .next/
 node_modules/
+tsconfig.tsbuildinfo
 
 # AI
 .claude/

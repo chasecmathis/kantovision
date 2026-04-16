@@ -15,10 +15,12 @@ from app.battle.manager import (
     submit_move,
     update_battle,
 )
-from app.battle.matchmaking import dequeue, enqueue, try_match
+from app.battle.matchmaking import dequeue, enqueue, is_queued, try_match
 from app.battle.state import BattleState, MoveSlot, PlayerState, PokemonBattleState, StoredSlot
 from app.database import get_db
+from app.dependencies import UserIdDep
 from app.sockets.connections import manager
+from app.sockets.tickets import consume_ticket, issue_ticket
 
 router = APIRouter(tags=["battle-ws"])
 
@@ -164,6 +166,28 @@ async def _save_result(state: BattleState) -> None:
         pass
 
 
+# ─── Reconnect grace period ───────────────────────────────────────────────────
+
+# Tracks users with active grace periods: user_id → pending forfeit task
+_pending_forfeits: dict[str, asyncio.Task] = {}
+
+RECONNECT_GRACE_SECONDS = 30
+
+
+async def _grace_period(user_id: str, battle_id: str) -> None:
+    """Forfeit the battle if the user hasn't reconnected within the grace window."""
+    try:
+        await asyncio.sleep(RECONNECT_GRACE_SECONDS)
+        _pending_forfeits.pop(user_id, None)
+        await _handle_forfeit(user_id, {"battle_id": battle_id})
+    except asyncio.CancelledError:
+        pass
+
+
+def _opponent_id(state: BattleState, user_id: str) -> str:
+    return state.player2.user_id if user_id == state.player1.user_id else state.player1.user_id
+
+
 # ─── Message handlers ─────────────────────────────────────────────────────────
 
 async def _handle_join_queue(user_id: str, data: dict) -> None:
@@ -274,9 +298,7 @@ async def _handle_forfeit(user_id: str, data: dict) -> None:
     if not state or state.status != "active":
         return
 
-    winner_id = (
-        state.player2.user_id if user_id == state.player1.user_id else state.player1.user_id
-    )
+    winner_id = _opponent_id(state, user_id)
     state.status = "ended"
     state.winner_id = winner_id
 
@@ -290,10 +312,29 @@ async def _handle_forfeit(user_id: str, data: dict) -> None:
     remove_battle(battle_id)
 
 
-async def _handle_disconnect_forfeit(user_id: str) -> None:
+async def _handle_disconnect(user_id: str) -> None:
+    """On disconnect, start a grace period instead of forfeiting immediately."""
     state = get_battle_by_user(user_id)
-    if state and state.status == "active":
-        await _handle_forfeit(user_id, {"battle_id": state.id})
+    if not state or state.status != "active":
+        return
+
+    await manager.send_to_user(_opponent_id(state, user_id), {
+        "type": "opponent_disconnected",
+        "message": f"Opponent disconnected. Waiting {RECONNECT_GRACE_SECONDS}s for reconnect...",
+    })
+    task = asyncio.create_task(_grace_period(user_id, state.id))
+    _pending_forfeits[user_id] = task
+
+
+# ─── Ticket endpoint ──────────────────────────────────────────────────────────
+
+@router.post("/ws/ticket")
+async def create_ws_ticket(user: UserIdDep) -> dict:
+    """
+    Exchange a valid JWT (via Authorization header) for a short-lived WebSocket ticket.
+    The ticket is single-use and expires in 30 seconds.
+    """
+    return {"ticket": issue_ticket(user.id)}
 
 
 # ─── WebSocket endpoint ───────────────────────────────────────────────────────
@@ -301,31 +342,46 @@ async def _handle_disconnect_forfeit(user_id: str) -> None:
 @router.websocket("/ws/battle")
 async def battle_ws(
     ws: WebSocket,
-    token: Annotated[str, Query()],
+    ticket: Annotated[str, Query()],
 ) -> None:
-    # Verify JWT before accepting the connection
-    try:
-        user_response = await asyncio.to_thread(lambda: get_db().auth.get_user(token))
-        if not user_response.user:
-            await ws.close(code=4001, reason="Unauthorized")
-            return
-        user_id: str = user_response.user.id
-    except Exception:
-        await ws.close(code=4001, reason="Unauthorized")
+    # Validate the single-use ticket — no JWT in the URL
+    user_id = consume_ticket(ticket)
+    if not user_id:
+        await ws.close(code=4001, reason="Invalid or expired ticket")
         return
 
     await ws.accept()
     await manager.connect(ws, user_id)
 
-    # Automatically rejoin any in-progress battle (e.g. after page refresh)
+    # Cancel any pending forfeit from a prior disconnect
+    pending_forfeit = _pending_forfeits.pop(user_id, None)
+    if pending_forfeit:
+        pending_forfeit.cancel()
+
+    # Re-join any in-progress battle or restore queue state
     existing = get_battle_by_user(user_id)
     if existing:
         await manager.join_room(existing.id, user_id)
-        await manager.send_to_user(user_id, {
-            "type": "battle_start",
-            "battle_id": existing.id,
-            "state": _ser_state(existing),
-        })
+        if pending_forfeit:
+            # Reconnect: notify opponent and send current state
+            await manager.send_to_user(_opponent_id(existing, user_id), {
+                "type": "opponent_reconnected",
+            })
+            await manager.send_to_user(user_id, {
+                "type": "battle_resumed",
+                "battle_id": existing.id,
+                "state": _ser_state(existing),
+            })
+        else:
+            # Fresh connect with an existing battle (e.g. page refresh mid-match)
+            await manager.send_to_user(user_id, {
+                "type": "battle_start",
+                "battle_id": existing.id,
+                "state": _ser_state(existing),
+            })
+    elif is_queued(user_id):
+        # User navigated away while in queue — restore queue state
+        await manager.send_to_user(user_id, {"type": "queue_joined"})
 
     try:
         while True:
@@ -352,4 +408,4 @@ async def battle_ws(
         pass
     finally:
         await manager.disconnect(user_id)
-        await _handle_disconnect_forfeit(user_id)
+        await _handle_disconnect(user_id)

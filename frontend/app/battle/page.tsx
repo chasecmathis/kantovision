@@ -18,6 +18,7 @@ export default function BattlePage() {
     myUserId,
     endInfo,
     waitingForOpponent,
+    opponentDisconnected,
     connect,
     joinQueue,
     leaveQueue,
@@ -88,7 +89,7 @@ export default function BattlePage() {
             {isDraw ? "DRAW" : iWon ? "VICTORY!" : "DEFEATED"}
           </h1>
           <p className="text-sm text-text-secondary" style={{ fontFamily: "var(--font-dm-sans)" }}>
-            {endInfo.reason === "forfeit" ? "Your opponent forfeited." : "All Pokémon have fainted."}
+            {endInfo.reason === "forfeit" ? (iWon ? "Your opponent forfeited." : "You forfeited.") : "All Pokémon have fainted."}
           </p>
         </div>
 
@@ -157,6 +158,13 @@ export default function BattlePage() {
             Forfeit
           </button>
         </div>
+
+        {/* Opponent disconnect banner */}
+        {opponentDisconnected && (
+          <div className="w-full px-4 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-xs text-center" style={{ fontFamily: "var(--font-dm-sans)" }}>
+            Opponent disconnected — waiting up to 30s for reconnect...
+          </div>
+        )}
 
         {/* Field */}
         <BattleField

@@ -43,3 +43,8 @@ def queue_position(user_id: str) -> int:
         if entry.user_id == user_id:
             return i + 1
     return 0
+
+
+def is_queued(user_id: str) -> bool:
+    """Return True if the user is currently in the matchmaking queue."""
+    return any(e.user_id == user_id for e in _queue)
