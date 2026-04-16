@@ -140,7 +140,7 @@ function ResultCard({ name, confidence }: { name: string; confidence: number }) 
                 key={s.stat.name}
                 name={s.stat.name}
                 value={s.base_stat}
-                delay={200 + i * 80}
+                delay={200 + i * 20}
               />
             ))}
           </div>

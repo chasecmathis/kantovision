@@ -171,7 +171,7 @@ export function MemberEditor({ member, slotIndex, onOpenPicker, onUpdate }: Memb
           <SectionTitle>Base Stats</SectionTitle>
           <div className="space-y-1.5">
             {pokemon.stats.map((s, i) => (
-              <StatBar key={s.stat.name} name={s.stat.name} value={s.base_stat} delay={i * 60} />
+              <StatBar key={s.stat.name} name={s.stat.name} value={s.base_stat} delay={i * 20} />
             ))}
           </div>
         </div>

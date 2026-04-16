@@ -255,7 +255,7 @@ export default function DetailPage() {
                   key={s.stat.name}
                   name={s.stat.name}
                   value={s.base_stat}
-                  delay={i * 80}
+                  delay={i * 20}
                 />
               ))}
             </div>
