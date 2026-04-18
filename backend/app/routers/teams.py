@@ -1,12 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
 
+from app.config import get_settings
 from app.database import get_db
 from app.dependencies import UserIdDep
 from app.schemas import SaveTeamRequest, TeamRow
 
 router = APIRouter(prefix="/teams", tags=["teams"])
-
-MAX_TEAMS = 10
 
 
 @router.get("")
@@ -24,12 +23,13 @@ def list_teams(user: UserIdDep) -> list[TeamRow]:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_team(body: SaveTeamRequest, user: UserIdDep) -> TeamRow:
+    settings = get_settings()
     db = get_db()
     existing = db.table("teams").select("id").eq("user_id", user.id).execute()
-    if len(existing.data) >= MAX_TEAMS:
+    if len(existing.data) >= settings.max_teams_per_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Maximum of {MAX_TEAMS} teams reached",
+            detail=f"Maximum of {settings.max_teams_per_user} teams reached",
         )
     payload = {
         "user_id": user.id,

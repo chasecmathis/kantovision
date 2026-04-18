@@ -24,8 +24,6 @@ function PlayerSide({
 
   if (!mon) return null;
 
-  console.log(mon)
-
   return (
     <div className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
       {/* Name + HP */}

@@ -1,5 +1,6 @@
 "use client";
 import { TypeBadge } from "@/src/components/pokemon/TypeBadge";
+import { MoveTimer } from "@/src/components/battle/MoveTimer";
 import type { BattleMoveSlot } from "@/src/hooks/useBattleWS";
 
 // Type colors matching the app's TypeBadge palette
@@ -16,25 +17,61 @@ interface ActionPanelProps {
   disabled?: boolean;
   waitingForOpponent?: boolean;
   onSelectMove: (index: number) => void;
+  /** Changes each turn — used to reset the move timer. Pass battleState.turn. */
+  turnKey: number;
+  /** Seconds per turn, matching backend move_timeout_seconds (default 60). */
+  timerSeconds?: number;
 }
 
-export function ActionPanel({ moves, disabled, waitingForOpponent, onSelectMove }: ActionPanelProps) {
+export function ActionPanel({
+  moves,
+  disabled,
+  waitingForOpponent,
+  onSelectMove,
+  turnKey,
+  timerSeconds = 60,
+}: ActionPanelProps) {
   const slots = Array(4).fill(null).map((_, i) => moves[i] ?? null);
+  const isMyTurn = !disabled && !waitingForOpponent;
+
+  let headerLabel: string;
+  if (waitingForOpponent) headerLabel = "WAITING FOR OPPONENT...";
+  else if (disabled) headerLabel = "OPPONENT'S TURN";
+  else headerLabel = "CHOOSE A MOVE";
 
   return (
     <div className="rounded-xl border border-bg-border bg-bg-surface overflow-hidden">
-      <div className="px-3 py-1.5 border-b border-bg-border flex items-center justify-between">
-        <span
-          className="text-[8px] font-bold text-text-muted tracking-[0.25em]"
-          style={{ fontFamily: "var(--font-unbounded)" }}
+      {/* Header */}
+      <div className="px-3 py-1.5 border-b border-bg-border flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="text-[8px] font-bold text-text-muted tracking-[0.25em] truncate"
+            style={{ fontFamily: "var(--font-unbounded)" }}
+          >
+            {headerLabel}
+          </span>
+          {waitingForOpponent && (
+            <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
+          )}
+        </div>
+
+        {/* Move timer — only visible when it's the player's turn */}
+        <div
+          style={{
+            opacity: isMyTurn ? 1 : 0,
+            transition: "opacity 0.3s ease",
+            pointerEvents: "none",
+          }}
         >
-          {waitingForOpponent ? "WAITING FOR OPPONENT..." : disabled ? "OPPONENT'S TURN" : "CHOOSE A MOVE"}
-        </span>
-        {waitingForOpponent && (
-          <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-        )}
+          <MoveTimer
+            key={turnKey}
+            totalSeconds={timerSeconds}
+            active={isMyTurn}
+          />
+        </div>
       </div>
 
+      {/* Move grid */}
       <div className="grid grid-cols-2 gap-1 p-2">
         {slots.map((move, i) => {
           if (!move) {

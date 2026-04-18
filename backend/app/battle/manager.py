@@ -47,6 +47,12 @@ def remove_battle(battle_id: str) -> None:
         _user_battle.pop(state.player2.user_id, None)
 
 
+def _reset_for_testing() -> None:
+    """Clear all battle state. Call this in test teardown fixtures."""
+    _battles.clear()
+    _user_battle.clear()
+
+
 def submit_move(battle_id: str, user_id: str, move_slot: int) -> bool:
     """
     Record a player's chosen move slot.

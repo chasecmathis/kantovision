@@ -22,6 +22,11 @@ def issue_ticket(user_id: str) -> str:
     return ticket_id
 
 
+def _reset_for_testing() -> None:
+    """Clear all ticket state. Call this in test teardown fixtures."""
+    _tickets.clear()
+
+
 def consume_ticket(ticket_id: str) -> str | None:
     """
     Validate and consume a ticket. Returns the associated user_id on success,

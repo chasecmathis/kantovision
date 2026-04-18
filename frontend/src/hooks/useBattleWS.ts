@@ -67,6 +67,10 @@ export function useBattleWS() {
   const [endInfo, setEndInfo] = useState<BattleEndInfo | null>(null);
   const [waitingForOpponent, setWaitingForOpponent] = useState(false);
   const [opponentDisconnected, setOpponentDisconnected] = useState(false);
+  const [opponentDisconnectMessage, setOpponentDisconnectMessage] = useState<string>(
+    "Opponent disconnected — waiting for reconnect..."
+  );
+  const [serverShuttingDown, setServerShuttingDown] = useState(false);
 
   // Keep a stable ref to battleId for use in closures
   const battleIdRef = useRef<string | null>(null);
@@ -109,6 +113,9 @@ export function useBattleWS() {
 
       case "opponent_disconnected":
         setOpponentDisconnected(true);
+        if (typeof msg.message === "string") {
+          setOpponentDisconnectMessage(msg.message);
+        }
         break;
 
       case "opponent_reconnected":
@@ -129,6 +136,10 @@ export function useBattleWS() {
       case "battle_end":
         setEndInfo({ winner_id: msg.winner_id as string | null, reason: msg.reason as "all_fainted" | "forfeit" });
         setPhase("ended");
+        break;
+
+      case "server_shutdown":
+        setServerShuttingDown(true);
         break;
 
       case "error":
@@ -225,6 +236,7 @@ export function useBattleWS() {
     setEndInfo(null);
     setWaitingForOpponent(false);
     setOpponentDisconnected(false);
+    setServerShuttingDown(false);
   }, []);
 
   return {
@@ -236,6 +248,8 @@ export function useBattleWS() {
     endInfo,
     waitingForOpponent,
     opponentDisconnected,
+    opponentDisconnectMessage,
+    serverShuttingDown,
     connect,
     joinQueue,
     leaveQueue,

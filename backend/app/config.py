@@ -11,6 +11,17 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str
     frontend_url: str = "http://localhost:3000"
 
+    # Logging
+    log_level: str = "INFO"
+    json_logs: bool = False
+
+    # Battle rules
+    move_timeout_seconds: int = 60
+    ws_grace_period_seconds: int = 30
+
+    # Team limits
+    max_teams_per_user: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:

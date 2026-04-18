@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Annotated
 
 import httpx
@@ -17,17 +18,20 @@ from app.battle.manager import (
 )
 from app.battle.matchmaking import dequeue, enqueue, is_queued, try_match
 from app.battle.state import BattleState, MoveSlot, PlayerState, PokemonBattleState, StoredSlot
+from app.config import get_settings
 from app.database import get_db
 from app.dependencies import UserIdDep
 from app.sockets.connections import manager
 from app.sockets.tickets import consume_ticket, issue_ticket
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["battle-ws"])
 
 # ─── HTTP client + move cache ─────────────────────────────────────────────────
 
 _http = httpx.AsyncClient(timeout=10.0)
 _move_cache: dict[str, MoveSlot] = {}
+_MOVE_CACHE_MAX = 512
 
 
 async def _fetch_move(name: str) -> MoveSlot:
@@ -45,13 +49,16 @@ async def _fetch_move(name: str) -> MoveSlot:
                 type=d["type"]["name"],
                 category=d["damage_class"]["name"],
             )
-            _move_cache[name] = move
-            return move
+        else:
+            move = MoveSlot(name=name, power=50, accuracy=100, pp=20, type="normal", category="physical")
     except Exception:
-        pass
-    fallback = MoveSlot(name=name, power=50, accuracy=100, pp=20, type="normal", category="physical")
-    _move_cache[name] = fallback
-    return fallback
+        move = MoveSlot(name=name, power=50, accuracy=100, pp=20, type="normal", category="physical")
+
+    if len(_move_cache) >= _MOVE_CACHE_MAX:
+        # Evict the oldest entry (dicts are insertion-ordered in Python 3.7+)
+        _move_cache.pop(next(iter(_move_cache)))
+    _move_cache[name] = move
+    return move
 
 
 # ─── Stat calculation (level 50) ─────────────────────────────────────────────
@@ -163,6 +170,47 @@ async def _save_result(state: BattleState) -> None:
             }).execute()
         )
     except Exception:
+        logger.exception("Failed to persist battle result for battle_id=%s", state.id)
+
+
+# ─── Move timeout ─────────────────────────────────────────────────────────────
+
+# Tracks per-player move timeout tasks: user_id → asyncio.Task
+_move_timeouts: dict[str, asyncio.Task] = {}
+
+
+def _start_move_timeout(user_id: str, battle_id: str) -> None:
+    """Start (or restart) the move timeout countdown for a player."""
+    existing = _move_timeouts.pop(user_id, None)
+    if existing:
+        existing.cancel()
+    _move_timeouts[user_id] = asyncio.create_task(_move_timeout(user_id, battle_id))
+
+
+def _cancel_move_timeout(user_id: str) -> None:
+    task = _move_timeouts.pop(user_id, None)
+    if task:
+        task.cancel()
+
+
+async def _move_timeout(user_id: str, battle_id: str) -> None:
+    """Auto-forfeit a player who hasn't submitted a move within the timeout window."""
+    settings = get_settings()
+    try:
+        await asyncio.sleep(settings.move_timeout_seconds)
+        _move_timeouts.pop(user_id, None)
+        state = get_battle(battle_id)
+        if not state or state.status != "active":
+            return
+        if user_id in state.pending_moves:
+            return  # move was submitted; race condition, no-op
+        logger.info("Move timeout for user_id=%s in battle_id=%s — auto-forfeiting", user_id, battle_id)
+        await manager.send_to_user(user_id, {
+            "type": "error",
+            "message": "Move timeout — you took too long and forfeited.",
+        })
+        await _handle_forfeit(user_id, {"battle_id": battle_id})
+    except asyncio.CancelledError:
         pass
 
 
@@ -171,13 +219,12 @@ async def _save_result(state: BattleState) -> None:
 # Tracks users with active grace periods: user_id → pending forfeit task
 _pending_forfeits: dict[str, asyncio.Task] = {}
 
-RECONNECT_GRACE_SECONDS = 30
-
 
 async def _grace_period(user_id: str, battle_id: str) -> None:
     """Forfeit the battle if the user hasn't reconnected within the grace window."""
+    settings = get_settings()
     try:
-        await asyncio.sleep(RECONNECT_GRACE_SECONDS)
+        await asyncio.sleep(settings.ws_grace_period_seconds)
         _pending_forfeits.pop(user_id, None)
         await _handle_forfeit(user_id, {"battle_id": battle_id})
     except asyncio.CancelledError:
@@ -208,7 +255,10 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
         team1 = await _fetch_team(entry1.team_id, entry1.user_id)
         team2 = await _fetch_team(entry2.team_id, entry2.user_id)
     except Exception:
-        # Re-queue both players on failure
+        logger.exception(
+            "Failed to load teams for match (user1=%s, user2=%s) — re-queuing",
+            entry1.user_id, entry2.user_id,
+        )
         enqueue(entry1.user_id, entry1.team_id)
         enqueue(entry2.user_id, entry2.team_id)
         for uid in [entry1.user_id, entry2.user_id]:
@@ -216,6 +266,11 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
         return
 
     state = create_battle(entry1, entry2, team1, team2)
+    logger.info(
+        "Match found: battle_id=%s player1=%s player2=%s",
+        state.id, entry1.user_id, entry2.user_id,
+    )
+
     await manager.join_room(state.id, entry1.user_id)
     await manager.join_room(state.id, entry2.user_id)
 
@@ -231,6 +286,10 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
         "battle_id": state.id,
         "state": _ser_state(state),
     })
+
+    # Start move timers for turn 1
+    _start_move_timeout(entry1.user_id, state.id)
+    _start_move_timeout(entry2.user_id, state.id)
 
 
 async def _handle_leave_queue(user_id: str) -> None:
@@ -251,11 +310,23 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
         await manager.send_to_user(user_id, {"type": "error", "message": "Battle not found or already ended"})
         return
 
+    # Validate move_slot is in bounds for the active Pokémon
+    player = state.player1 if user_id == state.player1.user_id else state.player2
+    active_mon = player.team[player.active_index]
+    move_slot_int = int(move_slot)
+    if move_slot_int < 0 or move_slot_int >= len(active_mon.moves):
+        await manager.send_to_user(user_id, {
+            "type": "error",
+            "message": f"Invalid move_slot {move_slot_int} (Pokémon has {len(active_mon.moves)} moves)",
+        })
+        return
+
     # Ignore duplicate moves from the same player
     if user_id in state.pending_moves:
         return
 
-    both_ready = submit_move(battle_id, user_id, int(move_slot))
+    both_ready = submit_move(battle_id, user_id, move_slot_int)
+    _cancel_move_timeout(user_id)
 
     if not both_ready:
         await manager.broadcast_to_room(battle_id, {"type": "move_received", "user_id": user_id})
@@ -272,6 +343,8 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
     result = resolve_turn(state, p1_move, p2_move)
     update_battle(result.new_state)
 
+    logger.info("Turn %d resolved in battle_id=%s", result.new_state.turn, battle_id)
+
     await manager.broadcast_to_room(battle_id, {
         "type": "turn_result",
         "log": result.log_entries,
@@ -279,6 +352,10 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
     })
 
     if result.battle_over:
+        logger.info(
+            "Battle ended: battle_id=%s winner=%s turns=%d",
+            battle_id, result.winner_id, result.new_state.turn,
+        )
         await manager.broadcast_to_room(battle_id, {
             "type": "battle_end",
             "winner_id": result.winner_id,
@@ -287,6 +364,10 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
         await _save_result(result.new_state)
         await manager.leave_room(battle_id)
         remove_battle(battle_id)
+    else:
+        # Start move timers for the next turn
+        _start_move_timeout(state.player1.user_id, battle_id)
+        _start_move_timeout(state.player2.user_id, battle_id)
 
 
 async def _handle_forfeit(user_id: str, data: dict) -> None:
@@ -302,6 +383,12 @@ async def _handle_forfeit(user_id: str, data: dict) -> None:
     state.status = "ended"
     state.winner_id = winner_id
 
+    # Cancel any pending move timeouts for both players
+    _cancel_move_timeout(state.player1.user_id)
+    _cancel_move_timeout(state.player2.user_id)
+
+    logger.info("Battle forfeited: battle_id=%s forfeiter=%s winner=%s", battle_id, user_id, winner_id)
+
     await manager.broadcast_to_room(battle_id, {
         "type": "battle_end",
         "winner_id": winner_id,
@@ -314,13 +401,15 @@ async def _handle_forfeit(user_id: str, data: dict) -> None:
 
 async def _handle_disconnect(user_id: str) -> None:
     """On disconnect, start a grace period instead of forfeiting immediately."""
+    settings = get_settings()
     state = get_battle_by_user(user_id)
     if not state or state.status != "active":
         return
 
+    logger.info("User disconnected from active battle: user_id=%s battle_id=%s", user_id, state.id)
     await manager.send_to_user(_opponent_id(state, user_id), {
         "type": "opponent_disconnected",
-        "message": f"Opponent disconnected. Waiting {RECONNECT_GRACE_SECONDS}s for reconnect...",
+        "message": f"Opponent disconnected. Waiting {settings.ws_grace_period_seconds}s for reconnect...",
     })
     task = asyncio.create_task(_grace_period(user_id, state.id))
     _pending_forfeits[user_id] = task
@@ -352,6 +441,7 @@ async def battle_ws(
 
     await ws.accept()
     await manager.connect(ws, user_id)
+    logger.info("WebSocket connected: user_id=%s", user_id)
 
     # Cancel any pending forfeit from a prior disconnect
     pending_forfeit = _pending_forfeits.pop(user_id, None)
@@ -364,6 +454,7 @@ async def battle_ws(
         await manager.join_room(existing.id, user_id)
         if pending_forfeit:
             # Reconnect: notify opponent and send current state
+            logger.info("User reconnected to battle: user_id=%s battle_id=%s", user_id, existing.id)
             await manager.send_to_user(_opponent_id(existing, user_id), {
                 "type": "opponent_reconnected",
             })
@@ -409,3 +500,4 @@ async def battle_ws(
     finally:
         await manager.disconnect(user_id)
         await _handle_disconnect(user_id)
+        logger.info("WebSocket disconnected: user_id=%s", user_id)

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { Trophy, Frown, Flag } from "lucide-react";
+import { Trophy, Frown, Flag, AlertTriangle } from "lucide-react";
 import { useBattleWS } from "@/src/hooks/useBattleWS";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { MatchmakingLobby } from "@/src/components/battle/MatchmakingLobby";
@@ -19,6 +19,8 @@ export default function BattlePage() {
     endInfo,
     waitingForOpponent,
     opponentDisconnected,
+    opponentDisconnectMessage,
+    serverShuttingDown,
     connect,
     joinQueue,
     leaveQueue,
@@ -133,6 +135,37 @@ export default function BattlePage() {
 
     return (
       <div className="max-w-[1400px] mx-auto px-6 py-6 flex flex-col gap-4 min-h-[calc(100vh-64px)]">
+        {/* Server shutdown warning */}
+        {serverShuttingDown && (
+          <div
+            className="w-full px-4 py-2.5 rounded-lg border flex items-center gap-2.5 text-xs animate-fade-in"
+            style={{
+              borderColor: "rgba(251,146,60,0.35)",
+              backgroundColor: "rgba(251,146,60,0.08)",
+              color: "#fb923c",
+              fontFamily: "var(--font-dm-sans)",
+            }}
+          >
+            <AlertTriangle size={13} className="shrink-0" />
+            <span>Server is restarting — your current battle may be interrupted. Results are saved.</span>
+          </div>
+        )}
+
+        {/* Opponent disconnect banner */}
+        {opponentDisconnected && (
+          <div
+            className="w-full px-4 py-2 rounded-lg border text-xs text-center"
+            style={{
+              borderColor: "rgba(234,179,8,0.3)",
+              backgroundColor: "rgba(234,179,8,0.08)",
+              color: "#eab308",
+              fontFamily: "var(--font-dm-sans)",
+            }}
+          >
+            {opponentDisconnectMessage}
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -159,13 +192,6 @@ export default function BattlePage() {
           </button>
         </div>
 
-        {/* Opponent disconnect banner */}
-        {opponentDisconnected && (
-          <div className="w-full px-4 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-xs text-center" style={{ fontFamily: "var(--font-dm-sans)" }}>
-            Opponent disconnected — waiting up to 30s for reconnect...
-          </div>
-        )}
-
         {/* Field */}
         <BattleField
           myPlayer={myPlayer}
@@ -181,6 +207,7 @@ export default function BattlePage() {
             disabled={myActiveMon?.fainted}
             waitingForOpponent={waitingForOpponent}
             onSelectMove={makeMove}
+            turnKey={battleState.turn}
           />
         </div>
       </div>
@@ -190,6 +217,20 @@ export default function BattlePage() {
   // ── Lobby / matchmaking view ───────────────────────────────────────────────
   return (
     <div className="max-w-[1400px] mx-auto px-6">
+      {serverShuttingDown && (
+        <div
+          className="mt-6 px-4 py-2.5 rounded-lg border flex items-center gap-2.5 text-xs animate-fade-in"
+          style={{
+            borderColor: "rgba(251,146,60,0.35)",
+            backgroundColor: "rgba(251,146,60,0.08)",
+            color: "#fb923c",
+            fontFamily: "var(--font-dm-sans)",
+          }}
+        >
+          <AlertTriangle size={13} className="shrink-0" />
+          <span>Server is restarting — matchmaking is temporarily unavailable.</span>
+        </div>
+      )}
       <MatchmakingLobby
         phase={phase}
         onFindBattle={(teamId) => joinQueue(teamId)}

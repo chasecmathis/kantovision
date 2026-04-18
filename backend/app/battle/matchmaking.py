@@ -48,3 +48,8 @@ def queue_position(user_id: str) -> int:
 def is_queued(user_id: str) -> bool:
     """Return True if the user is currently in the matchmaking queue."""
     return any(e.user_id == user_id for e in _queue)
+
+
+def _reset_for_testing() -> None:
+    """Clear all queue state. Call this in test teardown fixtures."""
+    _queue.clear()

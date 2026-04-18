@@ -46,5 +46,12 @@ class ConnectionManager:
             return_exceptions=True,
         )
 
+    async def broadcast_all(self, message: dict) -> None:
+        user_ids = list(self._sockets.keys())
+        await asyncio.gather(
+            *(self.send_to_user(uid, message) for uid in user_ids),
+            return_exceptions=True,
+        )
+
 
 manager = ConnectionManager()
