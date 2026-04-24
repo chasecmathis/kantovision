@@ -13,7 +13,6 @@ import {
   getOfficialArtwork,
   formatPokemonName,
   type TeamMember,
-  getFrontDefault,
 } from "@/src/lib/pokeapi";
 import { getTypeGradient } from "@/src/lib/typeColors";
 import { padId } from "@/src/lib/utils";

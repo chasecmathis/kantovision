@@ -3,8 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchPokemon,
   fetchPokemonList,
-  fetchPokemonSpecies,
-  fetchEvolutionChain,
   fetchMove,
   fetchNatureList,
   fetchItemList,
@@ -27,27 +25,6 @@ export function usePokemon(nameOrId: string | number) {
   });
 }
 
-export function usePokemonSpecies(nameOrId: string | number) {
-  return useQuery({
-    queryKey: ["pokemon-species", nameOrId],
-    queryFn: () => fetchPokemonSpecies(nameOrId),
-    enabled: !!nameOrId,
-  });
-}
-
-export function usePokemonWithSpecies(nameOrId: string | number) {
-  const pokemon = usePokemon(nameOrId);
-  const species = usePokemonSpecies(nameOrId);
-  return { pokemon, species };
-}
-
-export function useEvolutionChain(url: string | undefined) {
-  return useQuery({
-    queryKey: ["evolution-chain", url],
-    queryFn: () => fetchEvolutionChain(url!),
-    enabled: !!url,
-  });
-}
 
 export function useMove(name: string | null | undefined) {
   return useQuery({
@@ -69,7 +46,7 @@ export function useNatureList() {
 export function useItemList() {
   return useQuery({
     queryKey: ["item-list"],
-    queryFn: () => fetchItemList(2175),
+    queryFn: () => fetchItemList(5000),
     staleTime: Infinity,
   });
 }

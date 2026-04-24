@@ -7,6 +7,7 @@ dependencies = [
     "supabase>=2.4.0",
     "PyJWT>=2.8.0",
     "pydantic-settings>=2.2.0",
+    "httpx>=0.27.0",
 ]
 
 [tool.fastapi]
@@ -16,8 +17,8 @@ app = "app.main:app"
 dev-dependencies = [
     "ruff>=0.4.0",
     "pytest>=8.0.0",
-    "httpx>=0.27.0",
     "pytest-mock>=3.14.0",
+    "pytest-asyncio>=0.23.0",
 ]
 
 [tool.pytest.ini_options]

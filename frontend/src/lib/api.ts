@@ -240,6 +240,8 @@ export interface BattleHistoryItem {
   id: string;
   player1_id: string;
   player2_id: string;
+  player1_username: string | null;
+  player2_username: string | null;
   winner_id: string | null;
   turns: number;
   created_at: string;

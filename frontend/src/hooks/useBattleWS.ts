@@ -58,8 +58,10 @@ export function useBattleWS() {
   const wsRef = useRef<WebSocket | null>(null);
   const intentionalRef = useRef(false);
   const reconnectAttempted = useRef(false);
+  const pendingJoinRef = useRef<string | null>(null);
 
   const [phase, setPhase] = useState<BattlePhase>("idle");
+  const phaseRef = useRef<BattlePhase>("idle");
   const [battleState, setBattleState] = useState<ClientBattleState | null>(null);
   const [battleId, setBattleId] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -71,26 +73,32 @@ export function useBattleWS() {
     "Opponent disconnected — waiting for reconnect..."
   );
   const [serverShuttingDown, setServerShuttingDown] = useState(false);
+  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
 
   // Keep a stable ref to battleId for use in closures
   const battleIdRef = useRef<string | null>(null);
   battleIdRef.current = battleId;
 
+  function updatePhase(p: BattlePhase) {
+    phaseRef.current = p;
+    setPhase(p);
+  }
+
   function handleMessage(msg: Record<string, unknown>) {
     switch (msg.type) {
       case "queue_joined":
-        setPhase("queued");
+        updatePhase("queued");
         setWaitingForOpponent(false);
         break;
 
       case "queue_left":
-        setPhase("idle");
+        updatePhase("idle");
         break;
 
       case "match_found":
         setBattleId(msg.battle_id as string);
         battleIdRef.current = msg.battle_id as string;
-        setPhase("matched");
+        updatePhase("matched");
         break;
 
       case "battle_start":
@@ -98,7 +106,8 @@ export function useBattleWS() {
         setBattleId(msg.battle_id as string);
         battleIdRef.current = msg.battle_id as string;
         setLog((msg.state as ClientBattleState).log ?? []);
-        setPhase("active");
+        setTurnStartedAt(typeof msg.turn_started_at === "number" ? msg.turn_started_at : null);
+        updatePhase("active");
         setWaitingForOpponent(false);
         break;
 
@@ -107,7 +116,8 @@ export function useBattleWS() {
         setBattleId(msg.battle_id as string);
         battleIdRef.current = msg.battle_id as string;
         setLog((msg.state as ClientBattleState).log ?? []);
-        setPhase("active");
+        setTurnStartedAt(typeof msg.turn_started_at === "number" ? msg.turn_started_at : null);
+        updatePhase("active");
         setOpponentDisconnected(false);
         break;
 
@@ -130,12 +140,13 @@ export function useBattleWS() {
       case "turn_result":
         setBattleState(msg.state as ClientBattleState);
         setLog((prev) => [...prev, ...(msg.log as string[])]);
+        setTurnStartedAt(typeof msg.turn_started_at === "number" ? msg.turn_started_at : null);
         setWaitingForOpponent(false);
         break;
 
       case "battle_end":
         setEndInfo({ winner_id: msg.winner_id as string | null, reason: msg.reason as "all_fainted" | "forfeit" });
-        setPhase("ended");
+        updatePhase("ended");
         break;
 
       case "server_shutdown":
@@ -151,7 +162,7 @@ export function useBattleWS() {
   const connect = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    setPhase("connecting");
+    updatePhase("connecting");
     intentionalRef.current = false;
     reconnectAttempted.current = false;
 
@@ -159,7 +170,7 @@ export function useBattleWS() {
     const userId = data.session?.user?.id ?? null;
 
     if (!userId) {
-      setPhase("idle");
+      updatePhase("idle");
       return;
     }
 
@@ -170,7 +181,7 @@ export function useBattleWS() {
       const result = await fetchWsTicket();
       ticket = result.ticket;
     } catch {
-      setPhase("idle");
+      updatePhase("idle");
       return;
     }
 
@@ -179,8 +190,12 @@ export function useBattleWS() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      setPhase("idle");
+      updatePhase("idle");
       reconnectAttempted.current = false;
+      if (pendingJoinRef.current) {
+        ws.send(JSON.stringify({ type: "join_queue", team_id: pendingJoinRef.current }));
+        pendingJoinRef.current = null;
+      }
     };
 
     ws.onmessage = (event) => {
@@ -196,7 +211,7 @@ export function useBattleWS() {
         reconnectAttempted.current = true;
         setTimeout(() => connect(), 2500);
       } else {
-        setPhase("idle");
+        updatePhase("idle");
       }
     };
 
@@ -204,8 +219,13 @@ export function useBattleWS() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const joinQueue = useCallback((teamId: string) => {
-    wsRef.current?.send(JSON.stringify({ type: "join_queue", team_id: teamId }));
-  }, []);
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "join_queue", team_id: teamId }));
+    } else {
+      pendingJoinRef.current = teamId;
+      connect();
+    }
+  }, [connect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const leaveQueue = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: "leave_queue" }));
@@ -227,8 +247,12 @@ export function useBattleWS() {
 
   const disconnect = useCallback(() => {
     intentionalRef.current = true;
+    pendingJoinRef.current = null;
+    if (phaseRef.current === "queued") {
+      wsRef.current?.send(JSON.stringify({ type: "leave_queue" }));
+    }
     wsRef.current?.close();
-    setPhase("idle");
+    updatePhase("idle");
     setBattleState(null);
     setBattleId(null);
     battleIdRef.current = null;
@@ -237,6 +261,7 @@ export function useBattleWS() {
     setWaitingForOpponent(false);
     setOpponentDisconnected(false);
     setServerShuttingDown(false);
+    setTurnStartedAt(null);
   }, []);
 
   return {
@@ -250,6 +275,7 @@ export function useBattleWS() {
     opponentDisconnected,
     opponentDisconnectMessage,
     serverShuttingDown,
+    turnStartedAt,
     connect,
     joinQueue,
     leaveQueue,

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo } from "react";
 import { Search, X, ChevronDown, ChevronRight } from "lucide-react";
-import { useMove } from "@/src/hooks/usePokemon";
+import { useMove, usePokemon } from "@/src/hooks/usePokemon";
 import { TypeBadge } from "@/src/components/pokemon/TypeBadge";
 import {
   formatPokemonName,
@@ -97,8 +97,12 @@ export function MovePickerModal({ pokemon, currentMoveNames, onSelect, onClose }
   const [hovered, setHovered] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<LearnMethod>>(new Set<LearnMethod>(["level-up"]));
 
+  // Fetch full detail to get learnable moves — the list endpoint returns moves: []
+  const { data: fullPokemon, isLoading: movesLoading } = usePokemon(pokemon.id);
+  const moves = fullPokemon?.moves ?? [];
+
   const pickedSet = new Set(currentMoveNames.filter(Boolean) as string[]);
-  const groups = useMemo(() => groupMoves(pokemon.moves), [pokemon.moves]);
+  const groups = useMemo(() => groupMoves(moves), [moves]);
 
   const filteredGroups = useMemo(() => {
     if (!search) return groups;
@@ -119,7 +123,7 @@ export function MovePickerModal({ pokemon, currentMoveNames, onSelect, onClose }
     });
   };
 
-  const totalMoves = pokemon.moves.length;
+  const totalMoves = moves.length;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -163,7 +167,13 @@ export function MovePickerModal({ pokemon, currentMoveNames, onSelect, onClose }
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Move list */}
           <div className="flex-1 overflow-y-auto">
-            {(["level-up", "machine", "egg", "tutor", "other"] as LearnMethod[]).map((method) => {
+            {movesLoading ? (
+              <div className="p-4 space-y-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-8 rounded shimmer" />
+                ))}
+              </div>
+            ) : (["level-up", "machine", "egg", "tutor", "other"] as LearnMethod[]).map((method) => {
               const entries = filteredGroups[method];
               if (!entries || entries.length === 0) return null;
               const expanded = expandedGroups.has(method) || !!search;

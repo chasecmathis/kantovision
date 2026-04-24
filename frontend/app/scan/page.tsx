@@ -5,12 +5,10 @@ import Link from "next/link";
 import { Upload, Scan, Cpu, Zap, RotateCcw, ExternalLink } from "lucide-react";
 import { TypeBadge } from "@/src/components/pokemon/TypeBadge";
 import { StatBar } from "@/src/components/pokemon/StatBar";
-import { usePokemon, usePokemonSpecies } from "@/src/hooks/usePokemon";
+import { usePokemon } from "@/src/hooks/usePokemon";
 import {
   formatPokemonName,
   getOfficialArtwork,
-  getEnglishFlavorText,
-  getEnglishGenus,
 } from "@/src/lib/pokeapi";
 import { getTypeGradient } from "@/src/lib/typeColors";
 import { padId } from "@/src/lib/utils";
@@ -43,17 +41,14 @@ type ScanState = "idle" | "scanning" | "done";
 
 function ResultCard({ name, confidence }: { name: string; confidence: number }) {
   const pokemonQuery = usePokemon(name);
-  const speciesQuery = usePokemonSpecies(name);
-
   const pokemon = pokemonQuery.data;
-  const species = speciesQuery.data;
 
   if (!pokemon) return null;
 
   const types = pokemon.types.map((t) => t.type.name);
   const gradient = getTypeGradient(types);
-  const genus = species ? getEnglishGenus(species) : "";
-  const flavorText = species ? getEnglishFlavorText(species) : "";
+  const genus = pokemon.genus ?? "";
+  const flavorText = pokemon.flavor_text ?? "";
 
   return (
     <div className="animate-fade-up">

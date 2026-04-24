@@ -4,11 +4,10 @@ import Image from "next/image";
 import { Search, X, SlidersHorizontal, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  fetchPokemonList,
+  fetchPokedexList,
   fetchPokemon,
   formatPokemonName,
   getOfficialArtwork,
-  getPokemonId,
   type Pokemon,
 } from "@/src/lib/pokeapi";
 import { TypeBadge } from "@/src/components/pokemon/TypeBadge";
@@ -34,13 +33,7 @@ export function PokemonPickerModal({ onSelect, onClose, currentTeam }: PokemonPi
 
   const allPokemon = useQuery({
     queryKey: ["pokemon-batch", genFilter.start, genFilter.count],
-    queryFn: async () => {
-      const list = await fetchPokemonList(count, start);
-      const results = await Promise.all(
-        list.map((p) => fetchPokemon(getPokemonId(p.url)))
-      );
-      return results;
-    },
+    queryFn: () => fetchPokedexList(count, start),
     staleTime: 1000 * 60 * 30,
   });
 
@@ -215,8 +208,9 @@ export function PokemonPickerModal({ onSelect, onClose, currentTeam }: PokemonPi
                   <button
                     key={pokemon.id}
                     disabled={inTeam}
-                    onClick={() => {
-                      onSelect(pokemon);
+                    onClick={async () => {
+                      const full = await fetchPokemon(pokemon.id);
+                      onSelect(full);
                       onClose();
                     }}
                     className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${

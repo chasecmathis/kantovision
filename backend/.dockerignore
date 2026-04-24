@@ -1,0 +1,18 @@
+# Virtual environment — rebuilt inside Docker from uv.lock
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Test suite — not needed at runtime
+tests/
+
+# Secrets — injected via Railway env vars, never baked into the image
+.env
+
+# Dev/tool artifacts
+.pytest_cache/
+.ruff_cache/
+.python-version

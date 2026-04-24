@@ -65,6 +65,17 @@ class BattleRow(BaseModel):
     created_at: str
 
 
+class BattleHistoryItem(BaseModel):
+    id: str
+    player1_id: str
+    player2_id: str
+    player1_username: str | None = None
+    player2_username: str | None = None
+    winner_id: str | None = None
+    turns: int
+    created_at: str
+
+
 # ─── Profiles ─────────────────────────────────────────────────────────────────
 
 class ProfileRow(BaseModel):

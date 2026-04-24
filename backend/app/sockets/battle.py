@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.battle.engine import resolve_turn
@@ -21,45 +21,29 @@ from app.battle.state import BattleState, MoveSlot, PlayerState, PokemonBattleSt
 from app.config import get_settings
 from app.database import get_db
 from app.dependencies import UserIdDep
+from app.repositories import move_repo
 from app.sockets.connections import manager
 from app.sockets.tickets import consume_ticket, issue_ticket
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["battle-ws"])
 
-# ─── HTTP client + move cache ─────────────────────────────────────────────────
+# ─── Per-connection rate limiter ──────────────────────────────────────────────
 
-_http = httpx.AsyncClient(timeout=10.0)
-_move_cache: dict[str, MoveSlot] = {}
-_MOVE_CACHE_MAX = 512
+# user_id → list of recent message timestamps (monotonic clock)
+_rate_windows: dict[str, list[float]] = {}
 
 
-async def _fetch_move(name: str) -> MoveSlot:
-    if name in _move_cache:
-        return _move_cache[name]
-    try:
-        resp = await _http.get(f"https://pokeapi.co/api/v2/move/{name}")
-        if resp.status_code == 200:
-            d = resp.json()
-            move = MoveSlot(
-                name=d["name"],
-                power=d.get("power") or 50,
-                accuracy=d.get("accuracy") or 100,
-                pp=d.get("pp") or 20,
-                type=d["type"]["name"],
-                category=d["damage_class"]["name"],
-            )
-        else:
-            move = MoveSlot(name=name, power=50, accuracy=100, pp=20, type="normal", category="physical")
-    except Exception:
-        move = MoveSlot(name=name, power=50, accuracy=100, pp=20, type="normal", category="physical")
-
-    if len(_move_cache) >= _MOVE_CACHE_MAX:
-        # Evict the oldest entry (dicts are insertion-ordered in Python 3.7+)
-        _move_cache.pop(next(iter(_move_cache)))
-    _move_cache[name] = move
-    return move
-
+def _is_rate_limited(user_id: str) -> bool:
+    """Return True if the user has exceeded ws_rate_limit_per_second messages/s."""
+    settings = get_settings()
+    limit = settings.ws_rate_limit_per_second
+    now = asyncio.get_running_loop().time()
+    window = _rate_windows.setdefault(user_id, [])
+    # Prune timestamps older than 1 second
+    _rate_windows[user_id] = [t for t in window if now - t < 1.0]
+    _rate_windows[user_id].append(now)
+    return len(_rate_windows[user_id]) > limit
 
 # ─── Stat calculation (level 50) ─────────────────────────────────────────────
 
@@ -73,10 +57,21 @@ async def _build_pokemon(slot: StoredSlot) -> PokemonBattleState:
     iv = slot.ivs
     ev = slot.evs
 
-    moves = [await _fetch_move(n) for n in slot.move_names if n]
+    move_names = [n for n in slot.move_names if n]
+    if move_names:
+        move_rows = await asyncio.to_thread(move_repo.get_moves_bulk, get_db(), move_names)
+        moves = [
+            move_repo.to_move_slot(row)
+            for name in move_names
+            if (row := move_rows.get(name))
+        ]
+    else:
+        moves = []
+
     if not moves:
         moves = [MoveSlot(name="struggle", power=50, accuracy=100, pp=1, type="normal", category="physical")]
 
+    # base_stats and evs/ivs both use underscore format (special_attack, special_defense)
     return PokemonBattleState(
         species_id=slot.pokemon_id,
         name=slot.species_name or f"#{slot.pokemon_id}",
@@ -84,12 +79,11 @@ async def _build_pokemon(slot: StoredSlot) -> PokemonBattleState:
         max_hp=_stat(b.get("hp", 45), iv.get("hp", 31), ev.get("hp", 0), is_hp=True),
         attack=_stat(b.get("attack", 45), iv.get("attack", 31), ev.get("attack", 0)),
         defense=_stat(b.get("defense", 45), iv.get("defense", 31), ev.get("defense", 0)),
-        # base_stats uses "special-attack" (PokéAPI hyphen); evs/ivs use "special_attack" (underscore)
         special_attack=_stat(
-            b.get("special-attack", 45), iv.get("special_attack", 31), ev.get("special_attack", 0)
+            b.get("special_attack", 45), iv.get("special_attack", 31), ev.get("special_attack", 0)
         ),
         special_defense=_stat(
-            b.get("special-defense", 45), iv.get("special_defense", 31), ev.get("special_defense", 0)
+            b.get("special_defense", 45), iv.get("special_defense", 31), ev.get("special_defense", 0)
         ),
         speed=_stat(b.get("speed", 45), iv.get("speed", 31), ev.get("speed", 0)),
         types=slot.types or ["normal"],
@@ -178,6 +172,27 @@ async def _save_result(state: BattleState) -> None:
 # Tracks per-player move timeout tasks: user_id → asyncio.Task
 _move_timeouts: dict[str, asyncio.Task] = {}
 
+# Tracks when the current turn timer started: battle_id → epoch seconds (float)
+_turn_started_at: dict[str, float] = {}
+
+# Short-lived cache of recent battle results so reconnecting users see the summary.
+# user_id → {winner_id, reason, ended_at}
+_RECENT_BATTLE_TTL = 300  # 5 minutes
+_recent_battle_ends: dict[str, dict] = {}
+
+
+def _cache_battle_end(state: "BattleState", reason: str) -> None:
+    ts = time.time()
+    for uid in [state.player1.user_id, state.player2.user_id]:
+        _recent_battle_ends[uid] = {"winner_id": state.winner_id, "reason": reason, "ended_at": ts}
+
+
+def _pop_recent_battle_end(user_id: str) -> dict | None:
+    entry = _recent_battle_ends.pop(user_id, None)
+    if entry and time.time() - entry["ended_at"] < _RECENT_BATTLE_TTL:
+        return entry
+    return None
+
 
 def _start_move_timeout(user_id: str, battle_id: str) -> None:
     """Start (or restart) the move timeout countdown for a player."""
@@ -185,6 +200,15 @@ def _start_move_timeout(user_id: str, battle_id: str) -> None:
     if existing:
         existing.cancel()
     _move_timeouts[user_id] = asyncio.create_task(_move_timeout(user_id, battle_id))
+
+
+def _start_turn_timers(battle_id: str, user_id1: str, user_id2: str) -> float:
+    """Start move timers for both players and record the turn start timestamp."""
+    ts = time.time()
+    _turn_started_at[battle_id] = ts
+    _start_move_timeout(user_id1, battle_id)
+    _start_move_timeout(user_id2, battle_id)
+    return ts
 
 
 def _cancel_move_timeout(user_id: str) -> None:
@@ -243,6 +267,10 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
         await manager.send_to_user(user_id, {"type": "error", "message": "team_id required"})
         return
 
+    if get_battle_by_user(user_id):
+        await manager.send_to_user(user_id, {"type": "error", "message": "Already in an active battle"})
+        return
+
     enqueue(user_id, team_id)
     match = try_match()
 
@@ -281,15 +309,14 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
             "opponent_id": opp,
         })
 
+    turn_started_at = _start_turn_timers(state.id, entry1.user_id, entry2.user_id)
+
     await manager.broadcast_to_room(state.id, {
         "type": "battle_start",
         "battle_id": state.id,
         "state": _ser_state(state),
+        "turn_started_at": turn_started_at,
     })
-
-    # Start move timers for turn 1
-    _start_move_timeout(entry1.user_id, state.id)
-    _start_move_timeout(entry2.user_id, state.id)
 
 
 async def _handle_leave_queue(user_id: str) -> None:
@@ -308,6 +335,10 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
     state = get_battle(battle_id)
     if not state or state.status != "active":
         await manager.send_to_user(user_id, {"type": "error", "message": "Battle not found or already ended"})
+        return
+
+    if user_id != state.player1.user_id and user_id != state.player2.user_id:
+        await manager.send_to_user(user_id, {"type": "error", "message": "Not a participant in this battle"})
         return
 
     # Validate move_slot is in bounds for the active Pokémon
@@ -345,13 +376,14 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
 
     logger.info("Turn %d resolved in battle_id=%s", result.new_state.turn, battle_id)
 
-    await manager.broadcast_to_room(battle_id, {
-        "type": "turn_result",
-        "log": result.log_entries,
-        "state": _ser_state(result.new_state),
-    })
-
     if result.battle_over:
+        _turn_started_at.pop(battle_id, None)
+        _cache_battle_end(result.new_state, "all_fainted")
+        await manager.broadcast_to_room(battle_id, {
+            "type": "turn_result",
+            "log": result.log_entries,
+            "state": _ser_state(result.new_state),
+        })
         logger.info(
             "Battle ended: battle_id=%s winner=%s turns=%d",
             battle_id, result.winner_id, result.new_state.turn,
@@ -365,9 +397,15 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
         await manager.leave_room(battle_id)
         remove_battle(battle_id)
     else:
-        # Start move timers for the next turn
-        _start_move_timeout(state.player1.user_id, battle_id)
-        _start_move_timeout(state.player2.user_id, battle_id)
+        turn_started_at = _start_turn_timers(
+            battle_id, result.new_state.player1.user_id, result.new_state.player2.user_id
+        )
+        await manager.broadcast_to_room(battle_id, {
+            "type": "turn_result",
+            "log": result.log_entries,
+            "state": _ser_state(result.new_state),
+            "turn_started_at": turn_started_at,
+        })
 
 
 async def _handle_forfeit(user_id: str, data: dict) -> None:
@@ -389,6 +427,8 @@ async def _handle_forfeit(user_id: str, data: dict) -> None:
 
     logger.info("Battle forfeited: battle_id=%s forfeiter=%s winner=%s", battle_id, user_id, winner_id)
 
+    _turn_started_at.pop(battle_id, None)
+    _cache_battle_end(state, "forfeit")
     await manager.broadcast_to_room(battle_id, {
         "type": "battle_end",
         "winner_id": winner_id,
@@ -462,6 +502,7 @@ async def battle_ws(
                 "type": "battle_resumed",
                 "battle_id": existing.id,
                 "state": _ser_state(existing),
+                "turn_started_at": _turn_started_at.get(existing.id, time.time()),
             })
         else:
             # Fresh connect with an existing battle (e.g. page refresh mid-match)
@@ -469,16 +510,31 @@ async def battle_ws(
                 "type": "battle_start",
                 "battle_id": existing.id,
                 "state": _ser_state(existing),
+                "turn_started_at": _turn_started_at.get(existing.id, time.time()),
             })
-    elif is_queued(user_id):
-        # User navigated away while in queue — restore queue state
-        await manager.send_to_user(user_id, {"type": "queue_joined"})
+    else:
+        recent_end = _pop_recent_battle_end(user_id)
+        if recent_end:
+            # Battle ended while user was away — show them the result
+            await manager.send_to_user(user_id, {
+                "type": "battle_end",
+                "winner_id": recent_end["winner_id"],
+                "reason": recent_end["reason"],
+            })
+        elif is_queued(user_id):
+            # User navigated away while in queue — restore queue state
+            await manager.send_to_user(user_id, {"type": "queue_joined"})
 
     try:
         while True:
             try:
                 data = await ws.receive_json()
             except Exception:
+                break
+
+            if _is_rate_limited(user_id):
+                logger.warning("Rate limit exceeded for user_id=%s — closing connection", user_id)
+                await ws.close(code=4029, reason="Too many messages")
                 break
 
             match data.get("type"):
@@ -500,4 +556,5 @@ async def battle_ws(
     finally:
         await manager.disconnect(user_id)
         await _handle_disconnect(user_id)
+        _rate_windows.pop(user_id, None)
         logger.info("WebSocket disconnected: user_id=%s", user_id)

@@ -1,0 +1,20 @@
+# Railway deployment configuration
+# https://docs.railway.app/reference/config-as-code
+#
+# Setup steps:
+#   1. Create a new Railway project and link your GitHub repo
+#   2. In the service settings, set "Root Directory" to: backend
+#   3. Add all variables from .env.example in the Railway Variables tab
+#   4. Set JSON_LOGS=true in Railway (structured logs for Railway's log viewer)
+#   5. Deploy — Railway will build using the Dockerfile in this directory
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+numReplicas = 1
+healthcheckPath = "/health"
+healthcheckTimeout = 10
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

@@ -21,6 +21,7 @@ export default function BattlePage() {
     opponentDisconnected,
     opponentDisconnectMessage,
     serverShuttingDown,
+    turnStartedAt,
     connect,
     joinQueue,
     leaveQueue,
@@ -208,6 +209,7 @@ export default function BattlePage() {
             waitingForOpponent={waitingForOpponent}
             onSelectMove={makeMove}
             turnKey={battleState.turn}
+            turnStartedAt={turnStartedAt}
           />
         </div>
       </div>

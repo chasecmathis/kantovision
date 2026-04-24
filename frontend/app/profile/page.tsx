@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Check, X } from "lucide-react";
+import Link from "next/link";
+import { Pencil, Check, X, ArrowRight } from "lucide-react";
 import { useAuth } from "@/src/contexts/AuthContext";
-import { useMyProfile, useCreateProfile, useUpdateProfile } from "@/src/hooks/useProfile";
+import { useMyProfile, useCreateProfile, useUpdateProfile, useBattleHistory } from "@/src/hooks/useProfile";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -121,6 +122,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const { data: profile, isLoading } = useMyProfile();
   const updateProfile = useUpdateProfile();
+  const { data: battleHistory } = useBattleHistory();
 
   const [editingDisplayName, setEditingDisplayName] = useState(false);
   const [displayNameInput, setDisplayNameInput] = useState("");
@@ -138,6 +140,11 @@ export default function ProfilePage() {
 
   const initials = profile.username.slice(0, 2).toUpperCase();
   const emailPrefix = user.email?.split("@")[0] ?? "";
+
+  const battles = battleHistory ?? [];
+  const wins = battles.filter((b) => b.winner_id === user.id).length;
+  const losses = battles.filter((b) => b.winner_id !== null && b.winner_id !== user.id).length;
+  const winRate = battles.length > 0 ? Math.round((wins / battles.length) * 100) : null;
 
   async function handleSaveDisplayName() {
     const val = displayNameInput.trim() || null;
@@ -209,6 +216,39 @@ export default function ProfilePage() {
                 </button>
               </div>
             )}
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-bg-border">
+            <SectionTitle>Battle Record</SectionTitle>
+            <div className="grid grid-cols-4 gap-2 mb-3">
+              {[
+                { label: "Battles", value: String(battles.length), cls: "text-text-primary" },
+                { label: "Wins", value: String(wins), cls: "text-green-400" },
+                { label: "Losses", value: String(losses), cls: "text-red-400" },
+                {
+                  label: "Win Rate",
+                  value: winRate !== null ? `${winRate}%` : "—",
+                  cls: winRate === null ? "text-text-muted" : winRate >= 50 ? "text-green-400" : "text-red-400",
+                },
+              ].map(({ label, value, cls }) => (
+                <div key={label} className="bg-bg-elevated border border-bg-border rounded-lg px-2 py-2.5 flex flex-col gap-1">
+                  <p className="text-[7px] text-text-muted tracking-[0.2em] uppercase" style={{ fontFamily: "var(--font-unbounded)" }}>
+                    {label}
+                  </p>
+                  <p className={`text-base font-black tabular-nums leading-none ${cls}`} style={{ fontFamily: "var(--font-jetbrains)" }}>
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <Link
+              href="/battle/history"
+              className="inline-flex items-center gap-1 text-[10px] text-text-muted hover:text-accent transition-colors group"
+              style={{ fontFamily: "var(--font-unbounded)" }}
+            >
+              BATTLE HISTORY
+              <ArrowRight size={10} className="group-hover:translate-x-0.5 transition-transform" />
+            </Link>
           </div>
 
           <div className="mt-4 pt-4 border-t border-bg-border">

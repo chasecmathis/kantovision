@@ -20,10 +20,15 @@ async def _mock_fetch_team(team_id: str, user_id: str):
     return _make_team()
 
 
+async def _mock_save_result(state):
+    pass
+
+
 @pytest.fixture
 def ws_app(monkeypatch):
-    """App fixture with _fetch_team mocked to avoid Supabase calls."""
+    """App fixture with DB calls mocked to avoid Supabase client initialization."""
     monkeypatch.setattr("app.sockets.battle._fetch_team", _mock_fetch_team)
+    monkeypatch.setattr("app.sockets.battle._save_result", _mock_save_result)
     return create_app()
 
 

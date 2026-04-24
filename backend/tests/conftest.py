@@ -38,11 +38,15 @@ def reset_global_state():
     tickets_mod._reset_for_testing()
     ws_manager._rooms.clear()
     ws_manager._sockets.clear()
+    for task in list(battle_socket._pending_forfeits.values()):
+        task.cancel()
     battle_socket._pending_forfeits.clear()
-    battle_socket._move_cache.clear()
     for task in list(battle_socket._move_timeouts.values()):
         task.cancel()
     battle_socket._move_timeouts.clear()
+    battle_socket._rate_windows.clear()
+    battle_socket._recent_battle_ends.clear()
+    battle_socket._turn_started_at.clear()
 
 
 @pytest.fixture

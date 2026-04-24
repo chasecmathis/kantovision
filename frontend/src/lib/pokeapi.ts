@@ -1,6 +1,6 @@
-const BASE = "https://pokeapi.co/api/v2";
+const BACKEND_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-// ─── Existing interfaces ─────────────────────────────────────────────────────
+// ─── Interfaces (kept for backward compatibility with components) ─────────────
 
 export interface PokemonListItem {
   name: string;
@@ -44,6 +44,12 @@ export interface Pokemon {
       home: { front_default: string };
     };
   };
+  // Species fields — included from backend so a separate fetchPokemonSpecies call is not needed
+  is_legendary: boolean;
+  is_mythical: boolean;
+  flavor_text: string | null;
+  genus: string | null;
+  evolution_chain: { id: number; name: string }[];
 }
 
 export interface PokemonSpecies {
@@ -69,8 +75,6 @@ export interface ChainLink {
   evolution_details: { min_level?: number; item?: { name: string }; trigger: { name: string } }[];
 }
 
-// ─── New interfaces ──────────────────────────────────────────────────────────
-
 export interface MoveDetail {
   id: number;
   name: string;
@@ -78,7 +82,7 @@ export interface MoveDetail {
   accuracy: number | null;
   pp: number;
   type: { name: string };
-  damage_class: { name: string }; // "physical" | "special" | "status"
+  damage_class: { name: string };
   flavor_text_entries: { flavor_text: string; language: { name: string } }[];
 }
 
@@ -146,75 +150,280 @@ export interface TeamMember {
 
 export type Team = (TeamMember | null)[];
 
-// ─── Existing fetch functions ────────────────────────────────────────────────
+// ─── Backend response types (internal) ───────────────────────────────────────
+
+interface _BackendPokemon {
+  id: number;
+  name: string;
+  generation: number;
+  height: number | null;
+  weight: number | null;
+  base_experience: number | null;
+  is_legendary: boolean;
+  is_mythical: boolean;
+  color: string | null;
+  capture_rate: number | null;
+  base_happiness: number | null;
+  flavor_text: string | null;
+  genus: string | null;
+  evolution_chain_id: number | null;
+  evolution_chain: { id: number; name: string }[];
+  types: { slot: number; name: string }[];
+  abilities: { name: string; is_hidden: boolean }[];
+  stats: {
+    hp: number;
+    attack: number;
+    defense: number;
+    special_attack: number;
+    special_defense: number;
+    speed: number;
+  };
+  sprites: {
+    front_default: string | null;
+    official_artwork: string | null;
+    shiny: string | null;
+    home: string | null;
+  };
+  moves: { name: string; method: string; level: number | null }[];
+}
+
+// ─── Transformation helpers ───────────────────────────────────────────────────
+
+function _toPokemon(d: _BackendPokemon): Pokemon {
+  // Group moves by (name, method) so each move name appears once per method
+  const moveMap = new Map<string, PokemonMove>();
+  for (const m of d.moves) {
+    const key = m.name;
+    if (!moveMap.has(key)) {
+      moveMap.set(key, {
+        move: { name: m.name },
+        version_group_details: [],
+      });
+    }
+    moveMap.get(key)!.version_group_details.push({
+      level_learned_at: m.level ?? 0,
+      move_learn_method: { name: m.method },
+    });
+  }
+
+  return {
+    id: d.id,
+    name: d.name,
+    height: d.height ?? 0,
+    weight: d.weight ?? 0,
+    base_experience: d.base_experience ?? 0,
+    types: d.types.map((t) => ({
+      slot: t.slot,
+      type: { name: t.name, url: "" },
+    })),
+    stats: [
+      { base_stat: d.stats.hp, stat: { name: "hp" } },
+      { base_stat: d.stats.attack, stat: { name: "attack" } },
+      { base_stat: d.stats.defense, stat: { name: "defense" } },
+      { base_stat: d.stats.special_attack, stat: { name: "special-attack" } },
+      { base_stat: d.stats.special_defense, stat: { name: "special-defense" } },
+      { base_stat: d.stats.speed, stat: { name: "speed" } },
+    ],
+    abilities: d.abilities.map((a) => ({
+      ability: { name: a.name },
+      is_hidden: a.is_hidden,
+    })),
+    sprites: {
+      front_default: d.sprites.front_default ?? "",
+      other: {
+        "official-artwork": {
+          front_default: d.sprites.official_artwork ?? "",
+          front_shiny: d.sprites.shiny ?? "",
+        },
+        home: { front_default: d.sprites.home ?? "" },
+      },
+    },
+    moves: Array.from(moveMap.values()),
+    is_legendary: d.is_legendary,
+    is_mythical: d.is_mythical,
+    flavor_text: d.flavor_text,
+    genus: d.genus,
+    evolution_chain: d.evolution_chain,
+  };
+}
+
+function _toSpecies(d: _BackendPokemon): PokemonSpecies {
+  return {
+    id: d.id,
+    name: d.name,
+    is_legendary: d.is_legendary,
+    is_mythical: d.is_mythical,
+    base_happiness: d.base_happiness ?? 0,
+    capture_rate: d.capture_rate ?? 0,
+    color: { name: d.color ?? "unknown" },
+    // Single synthetic entry so getEnglishFlavorText() works without change
+    flavor_text_entries: d.flavor_text
+      ? [{ flavor_text: d.flavor_text, language: { name: "en" }, version: { name: "latest" } }]
+      : [],
+    genera: d.genus
+      ? [{ genus: d.genus, language: { name: "en" } }]
+      : [],
+    // Point to our own evolution-chain endpoint so useEvolutionChain continues to work
+    evolution_chain: {
+      url: d.evolution_chain_id
+        ? `${BACKEND_BASE}/evolution-chains/${d.evolution_chain_id}`
+        : "",
+    },
+  };
+}
+
+function _buildChainLink(items: { id: number; name: string }[], idx: number): ChainLink {
+  const item = items[idx];
+  return {
+    species: {
+      name: item.name,
+      // Use backend URL format so getPokemonId() (which takes last path segment) still works
+      url: `${BACKEND_BASE}/pokemon/${item.id}`,
+    },
+    evolves_to: idx + 1 < items.length ? [_buildChainLink(items, idx + 1)] : [],
+    evolution_details: [],
+  };
+}
+
+// ─── Fetch functions ──────────────────────────────────────────────────────────
 
 export async function fetchPokemonList(limit = 151, offset = 0): Promise<PokemonListItem[]> {
-  const res = await fetch(`${BASE}/pokemon?limit=${limit}&offset=${offset}`);
+  const res = await fetch(`${BACKEND_BASE}/pokemon?limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error("Failed to fetch pokemon list");
-  const data = await res.json();
-  return data.results;
+  const data: { id: number; name: string }[] = await res.json();
+  return data.map((d) => ({
+    name: d.name,
+    // Encode the ID into a URL so getPokemonId() continues to work
+    url: `${BACKEND_BASE}/pokemon/${d.id}`,
+  }));
+}
+
+// Returns a full Pokemon[] suitable for PokemonCard in a single request.
+// Uses the list endpoint which includes id, name, types, and sprite — no per-card fetch needed.
+export async function fetchPokedexList(limit: number, offset: number): Promise<Pokemon[]> {
+  const res = await fetch(`${BACKEND_BASE}/pokemon?limit=${limit}&offset=${offset}`);
+  if (!res.ok) throw new Error("Failed to fetch pokedex list");
+  const data: { id: number; name: string; generation: number; types: { slot: number; name: string }[]; sprite_official_artwork: string | null }[] = await res.json();
+  return data.map((d) => ({
+    id: d.id,
+    name: d.name,
+    height: 0,
+    weight: 0,
+    base_experience: 0,
+    types: d.types.map((t) => ({ slot: t.slot, type: { name: t.name, url: "" } })),
+    stats: [],
+    abilities: [],
+    moves: [],
+    sprites: {
+      front_default: "",
+      other: {
+        "official-artwork": { front_default: d.sprite_official_artwork ?? "", front_shiny: "" },
+        home: { front_default: "" },
+      },
+    },
+    is_legendary: false,
+    is_mythical: false,
+    flavor_text: null,
+    genus: null,
+    evolution_chain: [],
+  }));
 }
 
 export async function fetchPokemon(nameOrId: string | number): Promise<Pokemon> {
-  const res = await fetch(`${BASE}/pokemon/${nameOrId}`);
+  const res = await fetch(`${BACKEND_BASE}/pokemon/${nameOrId}`);
   if (!res.ok) throw new Error(`Failed to fetch pokemon: ${nameOrId}`);
-  return res.json();
+  const data: _BackendPokemon = await res.json();
+  return _toPokemon(data);
 }
 
 export async function fetchPokemonSpecies(nameOrId: string | number): Promise<PokemonSpecies> {
-  const res = await fetch(`${BASE}/pokemon-species/${nameOrId}`);
+  const res = await fetch(`${BACKEND_BASE}/pokemon/${nameOrId}`);
   if (!res.ok) throw new Error(`Failed to fetch species: ${nameOrId}`);
-  return res.json();
+  const data: _BackendPokemon = await res.json();
+  return _toSpecies(data);
 }
 
 export async function fetchEvolutionChain(url: string): Promise<EvolutionChain> {
+  if (!url) return { chain: { species: { name: "", url: "" }, evolves_to: [], evolution_details: [] } };
   const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch evolution chain");
-  return res.json();
+  const data: { id: number; chain: { id: number; name: string }[] } = await res.json();
+  if (!data.chain || data.chain.length === 0) {
+    return { chain: { species: { name: "", url: "" }, evolves_to: [], evolution_details: [] } };
+  }
+  return { chain: _buildChainLink(data.chain, 0) };
 }
 
-// ─── New fetch functions ─────────────────────────────────────────────────────
-
 export async function fetchMove(name: string): Promise<MoveDetail> {
-  const res = await fetch(`${BASE}/move/${name}`);
+  const res = await fetch(`${BACKEND_BASE}/moves/${name}`);
   if (!res.ok) throw new Error(`Failed to fetch move: ${name}`);
-  return res.json();
+  const d = await res.json();
+  return {
+    id: d.id,
+    name: d.name,
+    power: d.power ?? null,
+    accuracy: d.accuracy ?? null,
+    pp: d.pp,
+    type: { name: d.type },
+    damage_class: { name: d.damage_class },
+    // Single synthetic entry so getEnglishMoveText() works
+    flavor_text_entries: d.flavor_text
+      ? [{ flavor_text: d.flavor_text, language: { name: "en" } }]
+      : [],
+  };
 }
 
 export async function fetchNatureList(): Promise<Nature[]> {
-  const listRes = await fetch(`${BASE}/nature?limit=25`);
-  if (!listRes.ok) throw new Error("Failed to fetch nature list");
-  const listData: { results: { name: string; url: string }[] } = await listRes.json();
-  const natures = await Promise.all(
-    listData.results.map(async (n) => {
-      const r = await fetch(`${BASE}/nature/${n.name}`);
-      if (!r.ok) throw new Error(`Failed to fetch nature: ${n.name}`);
-      return r.json() as Promise<Nature>;
-    })
-  );
-  return natures;
+  const res = await fetch(`${BACKEND_BASE}/natures`);
+  if (!res.ok) throw new Error("Failed to fetch nature list");
+  const data: { name: string; increased_stat: string | null; decreased_stat: string | null }[] =
+    await res.json();
+  return data.map((n) => ({
+    name: n.name,
+    increased_stat: n.increased_stat ? { name: n.increased_stat } : null,
+    decreased_stat: n.decreased_stat ? { name: n.decreased_stat } : null,
+  }));
 }
 
 export async function fetchItemList(limit = 200, offset = 0): Promise<ItemListItem[]> {
-  const res = await fetch(`${BASE}/item?limit=${limit}&offset=${offset}`);
+  const res = await fetch(`${BACKEND_BASE}/items?limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error("Failed to fetch item list");
-  const data = await res.json();
-  return data.results;
+  const data: { id: number; name: string }[] = await res.json();
+  return data.map((d) => ({
+    name: d.name,
+    url: `${BACKEND_BASE}/items/${d.name}`,
+  }));
 }
 
 export async function fetchItem(name: string): Promise<ItemDetail> {
-  const res = await fetch(`${BASE}/item/${name}`);
+  const res = await fetch(`${BACKEND_BASE}/items/${name}`);
   if (!res.ok) throw new Error(`Failed to fetch item: ${name}`);
-  return res.json();
+  const d = await res.json();
+  return {
+    id: d.id,
+    name: d.name,
+    sprites: { default: d.sprite_url ?? null },
+    flavor_text_entries: d.flavor_text
+      ? [{ text: d.flavor_text, language: { name: "en" } }]
+      : [],
+    attributes: [],
+    category: { name: d.category ?? "unknown" },
+  };
 }
 
 export async function fetchAbility(name: string): Promise<AbilityDetail> {
-  const res = await fetch(`${BASE}/ability/${name}`);
+  const res = await fetch(`${BACKEND_BASE}/abilities/${name}`);
   if (!res.ok) throw new Error(`Failed to fetch ability: ${name}`);
-  return res.json();
+  const d = await res.json();
+  return {
+    name: d.name,
+    effect_entries: d.short_effect
+      ? [{ effect: d.effect ?? "", short_effect: d.short_effect, language: { name: "en" } }]
+      : [],
+  };
 }
 
-// ─── Utilities ───────────────────────────────────────────────────────────────
+// ─── Utilities (unchanged) ────────────────────────────────────────────────────
 
 export function getPokemonId(url: string): number {
   const parts = url.split("/").filter(Boolean);
@@ -289,7 +498,10 @@ export function getEnglishItemText(item: ItemDetail): string {
 
 export function getEnglishMoveText(move: MoveDetail): string {
   return (
-    move.flavor_text_entries.find((e) => e.language.name === "en")?.flavor_text.replace(/\f/g, " ").replace(/\n/g, " ") ?? ""
+    move.flavor_text_entries
+      .find((e) => e.language.name === "en")
+      ?.flavor_text.replace(/\f/g, " ")
+      .replace(/\n/g, " ") ?? ""
   );
 }
 

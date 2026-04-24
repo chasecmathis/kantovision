@@ -88,7 +88,119 @@ create policy "battles readable by participants"
 create index if not exists battles_player1_idx on public.battles(player1_id);
 create index if not exists battles_player2_idx on public.battles(player2_id);
 
--- ─── Run in Supabase SQL Editor to apply schema ───────────────────────────────
--- (The battles table above replaces the old one; run this if migrating)
--- drop table if exists public.pokemon_usage;
--- drop table if exists public.friendships;
+-- ─── Pokémon Reference Data (populated by ingestion script) ─────────────────
+-- No RLS: public read-only reference tables
+
+create table if not exists public.pokemon (
+  id                      integer primary key,
+  name                    text not null,
+  generation              integer not null,
+  height                  integer,
+  weight                  integer,
+  base_experience         integer,
+  -- Base stats (inlined — always fetched together, avoids join on hot paths)
+  hp                      integer not null,
+  attack                  integer not null,
+  defense                 integer not null,
+  special_attack          integer not null,
+  special_defense         integer not null,
+  speed                   integer not null,
+  -- Species display
+  is_legendary            boolean not null default false,
+  is_mythical             boolean not null default false,
+  color                   text,
+  capture_rate            integer,
+  base_happiness          integer,
+  flavor_text             text,
+  genus                   text,
+  evolution_chain_id      integer,
+  -- Sprites (inlined — needed on list pages to avoid extra join)
+  sprite_front            text,
+  sprite_official_artwork text,
+  sprite_shiny            text,
+  sprite_home             text
+);
+
+create table if not exists public.pokemon_types (
+  pokemon_id  integer not null references public.pokemon(id) on delete cascade,
+  type_name   text not null,
+  slot        integer not null,
+  primary key (pokemon_id, slot)
+);
+
+create table if not exists public.pokemon_abilities (
+  pokemon_id    integer not null references public.pokemon(id) on delete cascade,
+  ability_name  text not null,
+  is_hidden     boolean not null default false,
+  slot          integer not null,
+  primary key (pokemon_id, slot)
+);
+
+create table if not exists public.moves (
+  id            integer primary key,
+  name          text not null unique,
+  power         integer,
+  accuracy      integer,
+  pp            integer not null,
+  type          text not null,
+  damage_class  text not null,
+  flavor_text   text
+);
+
+create table if not exists public.pokemon_learnable_moves (
+  pokemon_id    integer not null references public.pokemon(id) on delete cascade,
+  move_id       integer not null references public.moves(id) on delete cascade,
+  learn_method  text not null,
+  min_level     integer,
+  primary key (pokemon_id, move_id, learn_method)
+);
+
+create table if not exists public.abilities (
+  name          text primary key,
+  short_effect  text,
+  effect        text
+);
+
+create table if not exists public.natures (
+  name            text primary key,
+  increased_stat  text,
+  decreased_stat  text
+);
+
+create table if not exists public.items (
+  id          integer primary key,
+  name        text not null unique,
+  sprite_url  text,
+  category    text,
+  flavor_text text
+);
+
+-- Evolution chains stored as a flat ordered JSON array [{id, name}, ...]
+-- Rationale: PokéAPI chains are variable-depth trees; frontend only needs a
+-- flat strip of evolution family members. JSONB avoids a self-referential table.
+create table if not exists public.evolution_chains (
+  id     integer primary key,
+  chain  jsonb not null default '[]'::jsonb
+);
+
+create index if not exists pokemon_types_pokemon_id_idx on public.pokemon_types(pokemon_id);
+create index if not exists pokemon_types_type_name_idx  on public.pokemon_types(type_name);
+create index if not exists pokemon_abilities_pokemon_id_idx on public.pokemon_abilities(pokemon_id);
+create index if not exists pokemon_learnable_moves_pokemon_id_idx on public.pokemon_learnable_moves(pokemon_id);
+create index if not exists pokemon_generation_idx on public.pokemon(generation);
+
+-- FK from pokemon → evolution_chains (must be added after both tables exist)
+-- PostgREST requires this to perform the embedded join in GET /pokemon/{id}
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.table_constraints
+    where constraint_name = 'fk_pokemon_evolution_chain'
+      and table_name = 'pokemon'
+      and table_schema = 'public'
+  ) then
+    alter table public.pokemon
+      add constraint fk_pokemon_evolution_chain
+      foreign key (evolution_chain_id) references public.evolution_chains(id);
+  end if;
+end$$;

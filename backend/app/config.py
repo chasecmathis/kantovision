@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     # Team limits
     max_teams_per_user: int = 10
 
+    # CORS — comma-separated list of allowed origins (no spaces)
+    # e.g. "https://kantovision.app,https://www.kantovision.app"
+    allowed_origins: str = "http://localhost:3000"
+
+    # WebSocket rate limiting — max messages per second per connection
+    ws_rate_limit_per_second: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:

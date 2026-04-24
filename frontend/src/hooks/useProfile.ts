@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getMyProfile, createProfile, updateProfile, type ProfileData } from "@/src/lib/api";
+import { getMyProfile, createProfile, updateProfile, getBattleHistory, type ProfileData, type BattleHistoryItem } from "@/src/lib/api";
 import { useAuth } from "@/src/contexts/AuthContext";
 
 export function useMyProfile() {
@@ -29,5 +29,15 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: (displayName: string | null) => updateProfile(displayName),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["profile", user?.id] }),
+  });
+}
+
+export function useBattleHistory() {
+  const { user } = useAuth();
+  return useQuery<BattleHistoryItem[]>({
+    queryKey: ["battle-history", user?.id],
+    queryFn: getBattleHistory,
+    enabled: !!user,
+    staleTime: 60_000,
   });
 }

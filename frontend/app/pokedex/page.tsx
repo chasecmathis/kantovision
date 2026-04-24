@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search, SlidersHorizontal, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { fetchPokemonList, fetchPokemon, formatPokemonName, getPokemonId } from "@/src/lib/pokeapi";
+import { fetchPokedexList, formatPokemonName } from "@/src/lib/pokeapi";
 import { PokemonCard, PokemonCardSkeleton } from "@/src/components/pokemon/PokemonCard";
 import { TypeBadge } from "@/src/components/pokemon/TypeBadge";
 import { ALL_TYPES } from "@/src/lib/typeChart";
@@ -17,13 +17,7 @@ export default function PokedexPage() {
 
   const pokemonQueries = useQuery({
     queryKey: ["pokemon-batch", genFilter.start, genFilter.count],
-    queryFn: async () => {
-      const list = await fetchPokemonList(genFilter.count, genFilter.start);
-      const results = await Promise.all(
-        list.map((p) => fetchPokemon(getPokemonId(p.url)))
-      );
-      return results;
-    },
+    queryFn: () => fetchPokedexList(genFilter.count, genFilter.start),
     staleTime: 1000 * 60 * 10,
   });
 

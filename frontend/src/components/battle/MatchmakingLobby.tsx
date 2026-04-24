@@ -23,6 +23,7 @@ export function MatchmakingLobby({ phase, onFindBattle, onCancel }: MatchmakingL
   }, [teams, selectedTeamId]);
 
   const isQueued = phase === "queued" || phase === "matched";
+  const isConnecting = phase === "connecting";
 
   function filledSlots(t: SavedTeam) {
     return t.slots.filter(Boolean).length;
@@ -134,7 +135,7 @@ export function MatchmakingLobby({ phase, onFindBattle, onCancel }: MatchmakingL
       ) : (
         <button
           onClick={() => selectedTeamId && onFindBattle(selectedTeamId)}
-          disabled={!selectedTeamId || teams.length === 0}
+          disabled={!selectedTeamId || teams.length === 0 || isConnecting}
           className="w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             fontFamily: "var(--font-unbounded)",
@@ -144,7 +145,7 @@ export function MatchmakingLobby({ phase, onFindBattle, onCancel }: MatchmakingL
           }}
         >
           <Swords size={14} />
-          FIND BATTLE
+          {isConnecting ? "CONNECTING..." : "FIND BATTLE"}
         </button>
       )}
     </div>

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_config import setup_logging
-from app.routers import battles, health, profiles, teams
+from app.routers import battles, health, pokedex, profiles, teams
 from app.sockets import battle as battle_ws
 from app.sockets.connections import manager as ws_manager
 
@@ -30,13 +30,14 @@ def create_app() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.frontend_url],
+        allow_origins=[o.strip() for o in settings.allowed_origins.split(",") if o.strip()],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     application.include_router(health.router)
+    application.include_router(pokedex.router)
     application.include_router(teams.router)
     application.include_router(profiles.router)
     application.include_router(battles.router)

@@ -3,15 +3,12 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight, Star, Shield, Sword, Zap } from "lucide-react";
-import { usePokemon, usePokemonSpecies, useEvolutionChain } from "@/src/hooks/usePokemon";
+import { usePokemon } from "@/src/hooks/usePokemon";
 import { TypeBadge } from "@/src/components/pokemon/TypeBadge";
 import { StatBar } from "@/src/components/pokemon/StatBar";
 import {
   getOfficialArtwork,
   formatPokemonName,
-  getEnglishFlavorText,
-  getEnglishGenus,
-  flattenEvolutionChain,
 } from "@/src/lib/pokeapi";
 import { getTypeGradient, TYPE_COLORS } from "@/src/lib/typeColors";
 import { getEffectiveness, ALL_TYPES } from "@/src/lib/typeChart";
@@ -60,11 +57,7 @@ export default function DetailPage() {
   const pokemonId = parseInt(id, 10);
 
   const pokemonQuery = usePokemon(pokemonId);
-  const speciesQuery = usePokemonSpecies(pokemonId);
-  const evolutionQuery = useEvolutionChain(speciesQuery.data?.evolution_chain.url);
-
   const pokemon = pokemonQuery.data;
-  const species = speciesQuery.data;
 
   if (pokemonQuery.isLoading) {
     return (
@@ -86,11 +79,9 @@ export default function DetailPage() {
   const types = pokemon.types.map((t) => t.type.name);
   const gradient = getTypeGradient(types);
   const artwork = getOfficialArtwork(pokemon.id);
-  const flavorText = species ? getEnglishFlavorText(species) : "";
-  const genus = species ? getEnglishGenus(species) : "";
-  const evolutions = evolutionQuery.data
-    ? flattenEvolutionChain(evolutionQuery.data.chain)
-    : [];
+  const flavorText = pokemon.flavor_text ?? "";
+  const genus = pokemon.genus ?? "";
+  const evolutions = pokemon.evolution_chain;
 
   const totalStats = pokemon.stats.reduce((s, st) => s + st.base_stat, 0);
 
@@ -163,12 +154,12 @@ export default function DetailPage() {
 
             {/* Badges */}
             <div className="absolute top-3 right-3 flex flex-col gap-1 items-end">
-              {species?.is_legendary && (
+              {pokemon.is_legendary && (
                 <span className="flex items-center gap-1 text-yellow-400 text-xs border border-yellow-400/30 bg-yellow-400/10 px-2 py-0.5 rounded">
                   <Star size={10} /> Legendary
                 </span>
               )}
-              {species?.is_mythical && (
+              {pokemon.is_mythical && (
                 <span className="flex items-center gap-1 text-purple-400 text-xs border border-purple-400/30 bg-purple-400/10 px-2 py-0.5 rounded">
                   <Zap size={10} /> Mythical
                 </span>

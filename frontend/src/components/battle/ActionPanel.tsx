@@ -21,6 +21,8 @@ interface ActionPanelProps {
   turnKey: number;
   /** Seconds per turn, matching backend move_timeout_seconds (default 60). */
   timerSeconds?: number;
+  /** Epoch seconds (from backend) when the current turn timer started. */
+  turnStartedAt?: number | null;
 }
 
 export function ActionPanel({
@@ -30,7 +32,11 @@ export function ActionPanel({
   onSelectMove,
   turnKey,
   timerSeconds = 60,
+  turnStartedAt,
 }: ActionPanelProps) {
+  const initialSeconds = turnStartedAt != null
+    ? Math.max(0, timerSeconds - Math.floor(Date.now() / 1000 - turnStartedAt))
+    : timerSeconds;
   const slots = Array(4).fill(null).map((_, i) => moves[i] ?? null);
   const isMyTurn = !disabled && !waitingForOpponent;
 
@@ -66,6 +72,7 @@ export function ActionPanel({
           <MoveTimer
             key={turnKey}
             totalSeconds={timerSeconds}
+            initialSeconds={initialSeconds}
             active={isMyTurn}
           />
         </div>

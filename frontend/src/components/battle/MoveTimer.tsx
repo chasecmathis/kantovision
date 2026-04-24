@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 
 interface MoveTimerProps {
   totalSeconds: number;
+  /** Pre-computed remaining seconds based on server turn_started_at. Defaults to totalSeconds. */
+  initialSeconds?: number;
   active: boolean;
 }
 
@@ -17,8 +19,8 @@ function ringColor(fraction: number): string {
   return "#ef4444";
 }
 
-export function MoveTimer({ totalSeconds, active }: MoveTimerProps) {
-  const [secondsLeft, setSecondsLeft] = useState(totalSeconds);
+export function MoveTimer({ totalSeconds, initialSeconds, active }: MoveTimerProps) {
+  const [secondsLeft, setSecondsLeft] = useState(initialSeconds ?? totalSeconds);
 
   useEffect(() => {
     if (!active) return;
