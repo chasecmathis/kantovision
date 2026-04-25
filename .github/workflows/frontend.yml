@@ -42,3 +42,21 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:8000
           NEXT_PUBLIC_API_WS_URL: ws://localhost:8000
         run: npm run build
+
+      - name: Analyze bundle
+        if: github.event_name == 'pull_request'
+        env:
+          ANALYZE: "true"
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_API_WS_URL: ws://localhost:8000
+        run: npm run build
+
+      - name: Upload bundle report
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analysis
+          path: frontend/.next/analyze/
+          retention-days: 14

@@ -121,7 +121,7 @@ export function MovePickerModal({ pokemon, currentMoveNames, onSelect, onClose }
     });
   };
 
-  const totalMoves = moves.length;
+  const totalMoves = (fullPokemon?.moves ?? []).length;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
