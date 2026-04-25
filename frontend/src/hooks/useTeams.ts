@@ -56,6 +56,7 @@ export async function hydrateTeam(slots: (SerializedSlot | null)[]): Promise<Tea
         moveNames: slot.move_names,
         evs: deserializeEvs(slot.evs),
         ivs: deserializeIvs(slot.ivs),
+        formName: slot.form_name ?? null,
       };
     })
   );
