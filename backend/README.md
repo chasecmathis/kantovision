@@ -21,7 +21,6 @@ Copy `.env.example` to `.env` and fill in:
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | Service role key — grants full DB access, never expose publicly |
 | `SUPABASE_JWT_SECRET` | Used to verify Supabase JWTs on every authenticated request |
-| `FRONTEND_URL` | Allowed CORS origin (e.g. `http://localhost:3000` or your Vercel URL) |
 | `ALLOWED_ORIGINS` | Comma-separated list for CORS (e.g. `https://kantovision.vercel.app`) |
 | `JSON_LOGS` | Set `true` in production for structured logs (Railway log viewer) |
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |

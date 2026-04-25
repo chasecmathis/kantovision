@@ -9,7 +9,6 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_key: str
     supabase_jwt_secret: str
-    frontend_url: str = "http://localhost:3000"
 
     # Logging
     log_level: str = "INFO"

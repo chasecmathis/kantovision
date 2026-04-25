@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 async def _lifespan(app: FastAPI):
     settings = get_settings()
     setup_logging(level=settings.log_level, json_logs=settings.json_logs)
-    logger.info("KantoVision API starting up")
+    logger.info("KantoVision API starting up — allowed_origins=%s", settings.allowed_origins)
     yield
     logger.info("KantoVision API shutting down — notifying active connections")
     await ws_manager.broadcast_all(
