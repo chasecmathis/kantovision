@@ -88,11 +88,18 @@ def _make_list_db(data, type_data=None):
     type_chain.eq.return_value = type_chain
     type_chain.execute.return_value = MagicMock(data=type_data)
 
+    varieties_chain = MagicMock()
+    varieties_chain.select.return_value = varieties_chain
+    varieties_chain.in_.return_value = varieties_chain
+    varieties_chain.execute.return_value = MagicMock(data=[])
+
     db = MagicMock()
 
     def _table(name):
         if name == "pokemon_types":
             return type_chain
+        if name == "pokemon_varieties":
+            return varieties_chain
         return pokemon_chain
 
     db.table.side_effect = _table
@@ -167,7 +174,7 @@ class TestGetPokemon:
     def test_queries_pokemon_table(self):
         db = _make_single_db(_minimal_pokemon_row())
         get_pokemon(db, 1)
-        db.table.assert_called_with("pokemon")
+        db.table.assert_any_call("pokemon")
 
 
 class TestGetPokemonList:
