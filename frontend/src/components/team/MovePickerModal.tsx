@@ -99,10 +99,8 @@ export function MovePickerModal({ pokemon, currentMoveNames, onSelect, onClose }
 
   // Fetch full detail to get learnable moves — the list endpoint returns moves: []
   const { data: fullPokemon, isLoading: movesLoading } = usePokemon(pokemon.id);
-  const moves = fullPokemon?.moves ?? [];
-
   const pickedSet = new Set(currentMoveNames.filter(Boolean) as string[]);
-  const groups = useMemo(() => groupMoves(moves), [moves]);
+  const groups = useMemo(() => groupMoves(fullPokemon?.moves ?? []), [fullPokemon?.moves]);
 
   const filteredGroups = useMemo(() => {
     if (!search) return groups;

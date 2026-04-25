@@ -211,7 +211,7 @@ export default function DetailPage() {
           {/* Flavor text */}
           {flavorText && (
             <p className="text-text-secondary text-sm leading-relaxed italic border-l-2 border-accent/30 pl-4">
-              "{flavorText}"
+              &ldquo;{flavorText}&rdquo;
             </p>
           )}
 

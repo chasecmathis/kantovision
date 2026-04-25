@@ -69,7 +69,11 @@ async def _build_pokemon(slot: StoredSlot) -> PokemonBattleState:
         moves = []
 
     if not moves:
-        moves = [MoveSlot(name="struggle", power=50, accuracy=100, pp=1, type="normal", category="physical")]
+        moves = [
+            MoveSlot(
+                name="struggle", power=50, accuracy=100, pp=1, type="normal", category="physical"
+            )
+        ]
 
     # base_stats and evs/ivs both use underscore format (special_attack, special_defense)
     return PokemonBattleState(
@@ -83,7 +87,9 @@ async def _build_pokemon(slot: StoredSlot) -> PokemonBattleState:
             b.get("special_attack", 45), iv.get("special_attack", 31), ev.get("special_attack", 0)
         ),
         special_defense=_stat(
-            b.get("special_defense", 45), iv.get("special_defense", 31), ev.get("special_defense", 0)
+            b.get("special_defense", 45),
+            iv.get("special_defense", 31),
+            ev.get("special_defense", 0)
         ),
         speed=_stat(b.get("speed", 45), iv.get("speed", 31), ev.get("speed", 0)),
         types=slot.types or ["normal"],
@@ -181,7 +187,7 @@ _RECENT_BATTLE_TTL = 300  # 5 minutes
 _recent_battle_ends: dict[str, dict] = {}
 
 
-def _cache_battle_end(state: "BattleState", reason: str) -> None:
+def _cache_battle_end(state: BattleState, reason: str) -> None:
     ts = time.time()
     for uid in [state.player1.user_id, state.player2.user_id]:
         _recent_battle_ends[uid] = {"winner_id": state.winner_id, "reason": reason, "ended_at": ts}
@@ -228,7 +234,9 @@ async def _move_timeout(user_id: str, battle_id: str) -> None:
             return
         if user_id in state.pending_moves:
             return  # move was submitted; race condition, no-op
-        logger.info("Move timeout for user_id=%s in battle_id=%s — auto-forfeiting", user_id, battle_id)
+        logger.info(
+            "Move timeout for user_id=%s in battle_id=%s — auto-forfeiting", user_id, battle_id
+        )
         await manager.send_to_user(user_id, {
             "type": "error",
             "message": "Move timeout — you took too long and forfeited.",
@@ -268,7 +276,9 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
         return
 
     if get_battle_by_user(user_id):
-        await manager.send_to_user(user_id, {"type": "error", "message": "Already in an active battle"})
+        await manager.send_to_user(
+            user_id, {"type": "error", "message": "Already in an active battle"}
+        )
         return
 
     enqueue(user_id, team_id)
@@ -290,7 +300,9 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
         enqueue(entry1.user_id, entry1.team_id)
         enqueue(entry2.user_id, entry2.team_id)
         for uid in [entry1.user_id, entry2.user_id]:
-            await manager.send_to_user(uid, {"type": "error", "message": "Failed to load team data"})
+            await manager.send_to_user(
+                uid, {"type": "error", "message": "Failed to load team data"}
+            )
         return
 
     state = create_battle(entry1, entry2, team1, team2)
@@ -329,16 +341,22 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
     move_slot = data.get("move_slot")
 
     if not battle_id or move_slot is None:
-        await manager.send_to_user(user_id, {"type": "error", "message": "battle_id and move_slot required"})
+        await manager.send_to_user(
+            user_id, {"type": "error", "message": "battle_id and move_slot required"}
+        )
         return
 
     state = get_battle(battle_id)
     if not state or state.status != "active":
-        await manager.send_to_user(user_id, {"type": "error", "message": "Battle not found or already ended"})
+        await manager.send_to_user(
+            user_id, {"type": "error", "message": "Battle not found or already ended"}
+        )
         return
 
     if user_id != state.player1.user_id and user_id != state.player2.user_id:
-        await manager.send_to_user(user_id, {"type": "error", "message": "Not a participant in this battle"})
+        await manager.send_to_user(
+            user_id, {"type": "error", "message": "Not a participant in this battle"}
+        )
         return
 
     # Validate move_slot is in bounds for the active Pokémon
@@ -348,7 +366,9 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
     if move_slot_int < 0 or move_slot_int >= len(active_mon.moves):
         await manager.send_to_user(user_id, {
             "type": "error",
-            "message": f"Invalid move_slot {move_slot_int} (Pokémon has {len(active_mon.moves)} moves)",
+            "message": (
+                f"Invalid move_slot {move_slot_int} (Pokémon has {len(active_mon.moves)} moves)"
+            ),
         })
         return
 
@@ -425,7 +445,9 @@ async def _handle_forfeit(user_id: str, data: dict) -> None:
     _cancel_move_timeout(state.player1.user_id)
     _cancel_move_timeout(state.player2.user_id)
 
-    logger.info("Battle forfeited: battle_id=%s forfeiter=%s winner=%s", battle_id, user_id, winner_id)
+    logger.info(
+        "Battle forfeited: battle_id=%s forfeiter=%s winner=%s", battle_id, user_id, winner_id
+    )
 
     _turn_started_at.pop(battle_id, None)
     _cache_battle_end(state, "forfeit")
@@ -449,7 +471,9 @@ async def _handle_disconnect(user_id: str) -> None:
     logger.info("User disconnected from active battle: user_id=%s battle_id=%s", user_id, state.id)
     await manager.send_to_user(_opponent_id(state, user_id), {
         "type": "opponent_disconnected",
-        "message": f"Opponent disconnected. Waiting {settings.ws_grace_period_seconds}s for reconnect...",
+        "message": (
+            f"Opponent disconnected. Waiting {settings.ws_grace_period_seconds}s for reconnect..."
+        ),
     })
     task = asyncio.create_task(_grace_period(user_id, state.id))
     _pending_forfeits[user_id] = task

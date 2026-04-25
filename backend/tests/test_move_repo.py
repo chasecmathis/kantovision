@@ -1,10 +1,8 @@
 """Tests for app.repositories.move_repo."""
 from unittest.mock import MagicMock
 
-import pytest
-
-from app.repositories.move_repo import MoveRow, get_move, get_moves_bulk, to_move_slot
 from app.battle.state import MoveSlot
+from app.repositories.move_repo import MoveRow, get_move, get_moves_bulk, to_move_slot
 
 
 def _make_db(data):

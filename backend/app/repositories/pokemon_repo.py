@@ -218,7 +218,10 @@ def get_pokemon_list(
                 generation=d["generation"],
                 sprite_official_artwork=d.get("sprite_official_artwork"),
                 types=sorted(
-                    [TypeSlot(slot=t["slot"], name=t["type_name"]) for t in (d.get("pokemon_types") or [])],
+                    [
+                        TypeSlot(slot=t["slot"], name=t["type_name"])
+                        for t in (d.get("pokemon_types") or [])
+                    ],
                     key=lambda t: t.slot,
                 ),
             )

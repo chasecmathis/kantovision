@@ -1,7 +1,7 @@
 """Tests for the WebSocket ticket system."""
 import time
 
-from app.sockets.tickets import TICKET_TTL, _tickets, consume_ticket, issue_ticket
+from app.sockets.tickets import _tickets, consume_ticket, issue_ticket
 
 
 class TestIssueTicket:

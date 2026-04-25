@@ -102,7 +102,9 @@ async def _get(client: httpx.AsyncClient, sem: asyncio.Semaphore, url: str) -> d
             return None
 
 
-async def _get_list(client: httpx.AsyncClient, sem: asyncio.Semaphore, endpoint: str, limit: int) -> list[dict]:
+async def _get_list(
+    client: httpx.AsyncClient, sem: asyncio.Semaphore, endpoint: str, limit: int
+) -> list[dict]:
     data = await _get(client, sem, f"{POKEAPI}/{endpoint}?limit={limit}&offset=0")
     return (data or {}).get("results", [])
 
@@ -145,8 +147,14 @@ async def ingest_abilities(client: httpx.AsyncClient, sem: asyncio.Semaphore, db
         if not data:
             return None
         effects = data.get("effect_entries", [])
-        short = next((e["short_effect"] for e in effects if (e.get("language") or {}).get("name") == "en"), None)
-        long_ = next((e["effect"] for e in effects if (e.get("language") or {}).get("name") == "en"), None)
+        short = next(
+            (e["short_effect"] for e in effects if (e.get("language") or {}).get("name") == "en"),
+            None,
+        )
+        long_ = next(
+            (e["effect"] for e in effects if (e.get("language") or {}).get("name") == "en"),
+            None,
+        )
         return {
             "name": data["name"],
             "short_effect": _clean_text(short),
@@ -387,7 +395,10 @@ async def ingest_learnable_moves(
             })
 
     logger.info("Upserting %d learnable-move rows…", len(resolved_rows))
-    _upsert_batch(db, "pokemon_learnable_moves", resolved_rows, LOG_EVERY, conflict_col="pokemon_id,move_id,learn_method")
+    _upsert_batch(
+        db, "pokemon_learnable_moves", resolved_rows, LOG_EVERY,
+        conflict_col="pokemon_id,move_id,learn_method",
+    )
     logger.info("Learnable moves done.")
 
 
@@ -418,7 +429,9 @@ async def _gather_raw(fn, items: list[dict]) -> list[dict | None]:
     return out
 
 
-def _upsert_batch(db: Any, table: str, rows: list[dict], log_every: int, conflict_col: str = "id") -> None:
+def _upsert_batch(
+    db: Any, table: str, rows: list[dict], log_every: int, conflict_col: str = "id"
+) -> None:
     """Upsert rows into a table in chunks of 500, logging progress."""
     if not rows:
         return

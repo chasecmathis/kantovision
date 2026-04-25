@@ -1,5 +1,5 @@
 """Tests for the /pokemon, /moves, /abilities, /natures, /items endpoints."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from starlette.testclient import TestClient
@@ -167,7 +167,9 @@ class TestAbilityEndpoint:
 class TestNaturesEndpoint:
     def test_returns_all_natures(self, client):
         rows = [
-            nature_repo.NatureRow(name="adamant", increased_stat="attack", decreased_stat="special-attack"),
+            nature_repo.NatureRow(
+                name="adamant", increased_stat="attack", decreased_stat="special-attack"
+            ),
             nature_repo.NatureRow(name="timid", increased_stat="speed", decreased_stat="attack"),
             nature_repo.NatureRow(name="hardy", increased_stat=None, decreased_stat=None),
         ]
@@ -185,7 +187,9 @@ class TestNaturesEndpoint:
 class TestItemsEndpoints:
     def test_list_returns_200(self, client):
         rows = [
-            item_repo.ItemRow(id=1, name="potion", sprite_url=None, category="medicine", flavor_text=None),
+            item_repo.ItemRow(
+                id=1, name="potion", sprite_url=None, category="medicine", flavor_text=None
+            ),
         ]
         with patch.object(item_repo, "get_item_list", return_value=rows):
             resp = client.get("/items")

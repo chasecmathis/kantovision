@@ -174,7 +174,7 @@ export default function BattlePage() {
               className="text-xs text-text-muted tracking-[0.3em] mb-1"
               style={{ fontFamily: "var(--font-jetbrains)" }}
             >
-              // BATTLE
+              {'// BATTLE'}
             </p>
             <h1
               className="text-2xl font-black text-text-primary tracking-tight"

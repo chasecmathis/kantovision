@@ -74,7 +74,7 @@ export default function TeamPage() {
             className="text-xs text-text-muted tracking-[0.3em] mb-1"
             style={{ fontFamily: "var(--font-jetbrains)" }}
           >
-            // TEAM BUILDER
+            {'// TEAM BUILDER'}
           </p>
           <div className="flex items-baseline gap-3">
             <h1

@@ -124,7 +124,7 @@ function ResultCard({ name, confidence }: { name: string; confidence: number }) 
           {/* Flavor text */}
           {flavorText && (
             <p className="mt-4 text-text-secondary text-sm leading-relaxed italic border-l-2 border-accent/30 pl-4">
-              "{flavorText}"
+              &ldquo;{flavorText}&rdquo;
             </p>
           )}
 
@@ -207,7 +207,7 @@ export default function ScanPage() {
       {/* Header */}
       <div className="mb-8">
         <p className="text-xs text-text-muted tracking-[0.3em] mb-2" style={{ fontFamily: "var(--font-jetbrains)" }}>
-          // AI CLASSIFIER
+          {'// AI CLASSIFIER'}
         </p>
         <h1 className="text-3xl font-black text-text-primary tracking-tight" style={{ fontFamily: "var(--font-unbounded)" }}>
           AI SCANNER

@@ -76,7 +76,7 @@ export default function PokedexPage() {
           className="text-xs text-text-muted tracking-[0.3em] mb-2"
           style={{ fontFamily: "var(--font-jetbrains)" }}
         >
-          // DATABASE
+          {'// DATABASE'}
         </p>
         <h1
           className="text-3xl font-black text-text-primary tracking-tight"

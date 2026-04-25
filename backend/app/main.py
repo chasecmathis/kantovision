@@ -20,7 +20,9 @@ async def _lifespan(app: FastAPI):
     logger.info("KantoVision API starting up")
     yield
     logger.info("KantoVision API shutting down — notifying active connections")
-    await ws_manager.broadcast_all({"type": "server_shutdown", "message": "Server is shutting down"})
+    await ws_manager.broadcast_all(
+        {"type": "server_shutdown", "message": "Server is shutting down"}
+    )
 
 
 def create_app() -> FastAPI:

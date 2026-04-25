@@ -7,15 +7,12 @@ resolve_turn produces correct results using those moves.
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from app.battle.engine import resolve_turn
-from app.battle.state import MoveSlot, PokemonBattleState, StoredSlot
+from app.battle.state import StoredSlot
 from app.repositories.move_repo import MoveRow
-from tests.helpers import make_move, make_pokemon, make_battle_state
-
+from tests.helpers import make_battle_state, make_move, make_pokemon
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -33,8 +30,14 @@ def _stored_slot(
             "special_attack": 65, "special_defense": 65, "speed": 45,
         },
         move_names=move_names or ["tackle", "growl", None, None],
-        evs={"hp": 0, "attack": 0, "defense": 0, "special_attack": 0, "special_defense": 0, "speed": 0},
-        ivs={"hp": 31, "attack": 31, "defense": 31, "special_attack": 31, "special_defense": 31, "speed": 31},
+        evs={
+            "hp": 0, "attack": 0, "defense": 0,
+            "special_attack": 0, "special_defense": 0, "speed": 0,
+        },
+        ivs={
+            "hp": 31, "attack": 31, "defense": 31,
+            "special_attack": 31, "special_defense": 31, "speed": 31,
+        },
     )
 
 
@@ -91,7 +94,7 @@ class TestBuildPokemon:
         assert mon.moves[0].name == "tackle"
 
     def test_calculates_stats_using_underscore_keys(self):
-        """Regression: base_stats uses underscore keys (special_attack), not hyphen (special-attack)."""
+        """Regression: base_stats uses underscore keys (special_attack), not hyphen."""
         from app.sockets import battle as battle_socket
         slot = _stored_slot(
             base_stats={
@@ -111,8 +114,9 @@ class TestBuildPokemon:
 
     def test_does_not_call_pokeapi(self):
         """Confirm no HTTP requests are made during _build_pokemon."""
-        from app.sockets import battle as battle_socket
         import httpx
+
+        from app.sockets import battle as battle_socket
         slot = _stored_slot()
         move_rows = _move_rows(("tackle", "normal", "physical", 40))
         with patch("app.sockets.battle.get_db", return_value=MagicMock()), \

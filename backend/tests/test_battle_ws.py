@@ -1,5 +1,4 @@
 """Integration tests for the WebSocket battle endpoint."""
-from unittest.mock import AsyncMock
 
 import pytest
 from starlette.testclient import TestClient
@@ -8,7 +7,6 @@ from app.main import create_app
 from app.sockets.tickets import issue_ticket
 from tests.conftest import TEST_USER_1, TEST_USER_2
 from tests.helpers import make_pokemon
-
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 

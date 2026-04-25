@@ -1,13 +1,10 @@
 """Tests for app.repositories.pokemon_repo."""
-from unittest.mock import MagicMock, call
-
-import pytest
+from unittest.mock import MagicMock
 
 from app.repositories.pokemon_repo import (
     EvolutionEntry,
     PokemonDetail,
     PokemonListRow,
-    TypeSlot,
     get_evolution_chain,
     get_pokemon,
     get_pokemon_list,

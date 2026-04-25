@@ -53,7 +53,7 @@ export function MatchmakingLobby({ phase, onFindBattle, onCancel }: MatchmakingL
           className="text-[10px] text-text-muted tracking-[0.3em] mb-2"
           style={{ fontFamily: "var(--font-jetbrains)" }}
         >
-          // MATCHMAKING
+          {'// MATCHMAKING'}
         </p>
         <h1
           className="text-3xl font-black text-text-primary tracking-tight"

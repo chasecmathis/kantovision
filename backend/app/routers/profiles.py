@@ -21,7 +21,9 @@ def create_profile(body: CreateProfileRequest, user: UserIdDep) -> ProfileRow:
     db = get_db()
     existing = db.table("profiles").select("id").eq("id", user.id).execute()
     if existing.data:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Profile already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Profile already exists"
+        )
     try:
         result = db.table("profiles").insert({
             "id": user.id,

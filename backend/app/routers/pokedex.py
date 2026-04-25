@@ -129,7 +129,9 @@ def list_pokemon(
     limit: int = Query(default=24, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     generation: int | None = Query(default=None, ge=1, le=9),
-    types: str | None = Query(default=None, description="Comma-separated type names, e.g. fire,water"),
+    types: str | None = Query(
+        default=None, description="Comma-separated type names, e.g. fire,water"
+    ),
 ) -> list[PokemonListItemOut]:
     type_list = [t.strip() for t in types.split(",")] if types else None
     rows = pokemon_repo.get_pokemon_list(
@@ -205,7 +207,10 @@ def get_ability(name: str) -> AbilityOut:
 @router.get("/natures", response_model=list[NatureOut])
 def list_natures() -> list[NatureOut]:
     rows = nature_repo.get_all_natures(get_db())
-    return [NatureOut(name=r.name, increased_stat=r.increased_stat, decreased_stat=r.decreased_stat) for r in rows]
+    return [
+        NatureOut(name=r.name, increased_stat=r.increased_stat, decreased_stat=r.decreased_stat)
+        for r in rows
+    ]
 
 
 # ─── Item endpoints ───────────────────────────────────────────────────────────
@@ -217,7 +222,10 @@ def list_items(
     search: str | None = Query(default=None),
 ) -> list[ItemListItemOut]:
     rows = item_repo.get_item_list(get_db(), limit=limit, offset=offset, search=search)
-    return [ItemListItemOut(id=r.id, name=r.name, sprite_url=r.sprite_url, category=r.category) for r in rows]
+    return [
+        ItemListItemOut(id=r.id, name=r.name, sprite_url=r.sprite_url, category=r.category)
+        for r in rows
+    ]
 
 
 @router.get("/items/{name}", response_model=ItemDetailOut)

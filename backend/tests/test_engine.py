@@ -1,9 +1,7 @@
 """Tests for the battle engine: damage calc, type effectiveness, turn resolution."""
-import pytest
 
 from app.battle.engine import calc_damage, get_type_effectiveness, resolve_turn
 from tests.helpers import make_battle_state, make_move, make_pokemon
-
 
 # ─── get_type_effectiveness ───────────────────────────────────────────────────
 
@@ -83,14 +81,18 @@ class TestCalcDamage:
         attacker_no_stab = make_pokemon(attack=100, types=["water"])
         defender = make_pokemon(defense=50, types=["normal"])
         move = make_move(power=80, type_="fire", category="physical")
-        assert calc_damage(attacker_stab, defender, move) > calc_damage(attacker_no_stab, defender, move)
+        stab_dmg = calc_damage(attacker_stab, defender, move)
+        no_stab_dmg = calc_damage(attacker_no_stab, defender, move)
+        assert stab_dmg > no_stab_dmg
 
     def test_super_effective_doubles_damage(self):
         attacker = make_pokemon(attack=100, types=["normal"])
         neutral_defender = make_pokemon(defense=50, types=["normal"])
         weak_defender = make_pokemon(defense=50, types=["grass"])
         move = make_move(power=80, type_="fire", category="physical")
-        assert calc_damage(attacker, weak_defender, move) == calc_damage(attacker, neutral_defender, move) * 2
+        assert calc_damage(attacker, weak_defender, move) == (
+            calc_damage(attacker, neutral_defender, move) * 2
+        )
 
     def test_minimum_damage_is_1(self):
         # Very weak attacker vs very strong defender
@@ -144,7 +146,6 @@ class TestResolveTurn:
 
     def test_no_winner_when_both_alive(self):
         # Both Pokémon survive the turn
-        tanky = make_pokemon(hp=9999, defense=255, special_defense=255)
         state = make_battle_state(
             team1=[make_pokemon(name="A", hp=9999, defense=255, special_defense=255)],
             team2=[make_pokemon(name="B", hp=9999, defense=255, special_defense=255)],

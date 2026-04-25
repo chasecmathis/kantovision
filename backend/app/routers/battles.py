@@ -32,7 +32,9 @@ def get_battle_history(user_id: UserIdDep) -> list[BattleHistoryItem]:
 
     # Collect unique player IDs to look up usernames in a single query
     player_ids = {r["player1_id"] for r in rows} | {r["player2_id"] for r in rows}
-    profiles_result = db.table("profiles").select("id,username").in_("id", list(player_ids)).execute()
+    profiles_result = (
+        db.table("profiles").select("id,username").in_("id", list(player_ids)).execute()
+    )
     username_map: dict[str, str] = {p["id"]: p["username"] for p in (profiles_result.data or [])}
 
     return [
