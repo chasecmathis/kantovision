@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 TICKET_TTL = 30.0  # seconds
 
+
 @dataclass
 class _Ticket:
     user_id: str

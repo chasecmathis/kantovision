@@ -1,4 +1,5 @@
 """Tests for the in-memory battle manager."""
+
 from app.battle.manager import (
     create_battle,
     get_battle,

@@ -4,6 +4,7 @@ Integration tests for battle engine + move_repo.
 Verifies that _build_pokemon loads moves from the DB (not PokéAPI) and that
 resolve_turn produces correct results using those moves.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,6 +17,7 @@ from tests.helpers import make_battle_state, make_move, make_pokemon
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+
 def _stored_slot(
     pokemon_id: int = 1,
     move_names: list[str | None] | None = None,
@@ -25,18 +27,31 @@ def _stored_slot(
         pokemon_id=pokemon_id,
         species_name="bulbasaur",
         types=["grass", "poison"],
-        base_stats=base_stats or {
-            "hp": 45, "attack": 49, "defense": 49,
-            "special_attack": 65, "special_defense": 65, "speed": 45,
+        base_stats=base_stats
+        or {
+            "hp": 45,
+            "attack": 49,
+            "defense": 49,
+            "special_attack": 65,
+            "special_defense": 65,
+            "speed": 45,
         },
         move_names=move_names or ["tackle", "growl", None, None],
         evs={
-            "hp": 0, "attack": 0, "defense": 0,
-            "special_attack": 0, "special_defense": 0, "speed": 0,
+            "hp": 0,
+            "attack": 0,
+            "defense": 0,
+            "special_attack": 0,
+            "special_defense": 0,
+            "speed": 0,
         },
         ivs={
-            "hp": 31, "attack": 31, "defense": 31,
-            "special_attack": 31, "special_defense": 31, "speed": 31,
+            "hp": 31,
+            "attack": 31,
+            "defense": 31,
+            "special_attack": 31,
+            "special_defense": 31,
+            "speed": 31,
         },
     )
 
@@ -45,13 +60,20 @@ def _move_rows(*names_and_types) -> dict[str, MoveRow]:
     rows = {}
     for name, type_, category, power in names_and_types:
         rows[name] = MoveRow(
-            id=1, name=name, power=power, accuracy=100,
-            pp=35, type=type_, damage_class=category, flavor_text=None,
+            id=1,
+            name=name,
+            power=power,
+            accuracy=100,
+            pp=35,
+            type=type_,
+            damage_class=category,
+            flavor_text=None,
         )
     return rows
 
 
 # ─── _build_pokemon tests ─────────────────────────────────────────────────────
+
 
 class TestBuildPokemon:
     def _run(self, coro):
@@ -59,13 +81,16 @@ class TestBuildPokemon:
 
     def test_loads_moves_from_db(self):
         from app.sockets import battle as battle_socket
+
         slot = _stored_slot(move_names=["tackle", "razor-leaf"])
         move_rows = _move_rows(
             ("tackle", "normal", "physical", 40),
             ("razor-leaf", "grass", "physical", 55),
         )
-        with patch("app.sockets.battle.get_db", return_value=MagicMock()), \
-             patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows):
+        with (
+            patch("app.sockets.battle.get_db", return_value=MagicMock()),
+            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+        ):
             mon = self._run(battle_socket._build_pokemon(slot))
 
         assert len(mon.moves) == 2
@@ -74,9 +99,12 @@ class TestBuildPokemon:
 
     def test_falls_back_to_struggle_when_no_moves(self):
         from app.sockets import battle as battle_socket
+
         slot = _stored_slot(move_names=[None, None, None, None])
-        with patch("app.sockets.battle.get_db", return_value=MagicMock()), \
-             patch("app.sockets.battle.move_repo.get_moves_bulk", return_value={}):
+        with (
+            patch("app.sockets.battle.get_db", return_value=MagicMock()),
+            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value={}),
+        ):
             mon = self._run(battle_socket._build_pokemon(slot))
 
         assert len(mon.moves) == 1
@@ -84,10 +112,13 @@ class TestBuildPokemon:
 
     def test_skips_moves_missing_from_db(self):
         from app.sockets import battle as battle_socket
+
         slot = _stored_slot(move_names=["tackle", "unknown-move"])
         move_rows = _move_rows(("tackle", "normal", "physical", 40))
-        with patch("app.sockets.battle.get_db", return_value=MagicMock()), \
-             patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows):
+        with (
+            patch("app.sockets.battle.get_db", return_value=MagicMock()),
+            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+        ):
             mon = self._run(battle_socket._build_pokemon(slot))
 
         assert len(mon.moves) == 1
@@ -96,15 +127,22 @@ class TestBuildPokemon:
     def test_calculates_stats_using_underscore_keys(self):
         """Regression: base_stats uses underscore keys (special_attack), not hyphen."""
         from app.sockets import battle as battle_socket
+
         slot = _stored_slot(
             base_stats={
-                "hp": 100, "attack": 80, "defense": 80,
-                "special_attack": 130, "special_defense": 90, "speed": 110,
+                "hp": 100,
+                "attack": 80,
+                "defense": 80,
+                "special_attack": 130,
+                "special_defense": 90,
+                "speed": 110,
             }
         )
         move_rows = _move_rows(("tackle", "normal", "physical", 40))
-        with patch("app.sockets.battle.get_db", return_value=MagicMock()), \
-             patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows):
+        with (
+            patch("app.sockets.battle.get_db", return_value=MagicMock()),
+            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+        ):
             mon = self._run(battle_socket._build_pokemon(slot))
 
         # special_attack should NOT be 45 (the old default from the bug where hyphen keys were used)
@@ -117,16 +155,20 @@ class TestBuildPokemon:
         import httpx
 
         from app.sockets import battle as battle_socket
+
         slot = _stored_slot()
         move_rows = _move_rows(("tackle", "normal", "physical", 40))
-        with patch("app.sockets.battle.get_db", return_value=MagicMock()), \
-             patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows), \
-             patch.object(httpx.AsyncClient, "get", side_effect=AssertionError("HTTP call made!")):
+        with (
+            patch("app.sockets.battle.get_db", return_value=MagicMock()),
+            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+            patch.object(httpx.AsyncClient, "get", side_effect=AssertionError("HTTP call made!")),
+        ):
             # Should not raise since httpx is not used anymore
             self._run(battle_socket._build_pokemon(slot))
 
 
 # ─── resolve_turn integration ─────────────────────────────────────────────────
+
 
 class TestResolveTurnWithDbMoves:
     """Smoke test: full turn resolution using moves from DB rows."""
@@ -168,5 +210,9 @@ class TestResolveTurnWithDbMoves:
         result = resolve_turn(state, 0, 0)
 
         log_text = " ".join(result.log_entries).lower()
-        assert "2×" in log_text or "2x" in log_text or "super" in log_text.lower() or \
-               result.new_state.player2.team[0].current_hp < defender.current_hp
+        assert (
+            "2×" in log_text
+            or "2x" in log_text
+            or "super" in log_text.lower()
+            or result.new_state.player2.team[0].current_hp < defender.current_hp
+        )

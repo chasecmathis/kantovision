@@ -12,6 +12,7 @@ interface PokemonCardProps {
   onClick?: (pokemon: Pokemon) => void;
   selected?: boolean;
   compact?: boolean;
+  formCount?: number;
 }
 
 export function PokemonCard({
@@ -20,6 +21,7 @@ export function PokemonCard({
   onClick,
   selected,
   compact,
+  formCount,
 }: PokemonCardProps) {
   const types = pokemon.types.map((t) => t.type.name);
   const gradient = getTypeGradient(types);

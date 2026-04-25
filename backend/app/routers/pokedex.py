@@ -11,6 +11,7 @@ router = APIRouter(tags=["pokedex"])
 
 # ─── Response models ──────────────────────────────────────────────────────────
 
+
 class TypeSlotOut(BaseModel):
     slot: int
     name: str
@@ -48,6 +49,14 @@ class EvolutionEntryOut(BaseModel):
     name: str
 
 
+class VarietyOut(BaseModel):
+    form_pokemon_id: int
+    form_name: str  # "graveler-alola"
+    form_suffix: str  # "alola"  (empty string for default form)
+    display_name: str  # "Alolan" / "Default"
+    is_default: bool
+
+
 class PokemonDetailOut(BaseModel):
     id: int
     name: str
@@ -69,6 +78,7 @@ class PokemonDetailOut(BaseModel):
     stats: StatsOut
     sprites: SpritesOut
     moves: list[MoveEntryOut]
+    varieties: list[VarietyOut] = []
 
 
 class PokemonListItemOut(BaseModel):
@@ -77,6 +87,7 @@ class PokemonListItemOut(BaseModel):
     generation: int
     types: list[TypeSlotOut]
     sprite_official_artwork: str | None
+    varieties_count: int = 0
 
 
 class MoveOut(BaseModel):
@@ -124,6 +135,7 @@ class EvolutionChainOut(BaseModel):
 
 # ─── Pokémon endpoints ────────────────────────────────────────────────────────
 
+
 @router.get("/pokemon", response_model=list[PokemonListItemOut])
 def list_pokemon(
     limit: int = Query(default=24, ge=1, le=200),
@@ -148,6 +160,7 @@ def list_pokemon(
             generation=r.generation,
             types=[TypeSlotOut(slot=t.slot, name=t.name) for t in r.types],
             sprite_official_artwork=r.sprite_official_artwork,
+            varieties_count=r.varieties_count,
         )
         for r in rows
     ]
@@ -175,6 +188,7 @@ def get_evolution_chain(chain_id: int) -> EvolutionChainOut:
 
 # ─── Move endpoints ───────────────────────────────────────────────────────────
 
+
 @router.get("/moves/{name}", response_model=MoveOut)
 def get_move(name: str) -> MoveOut:
     row = move_repo.get_move(get_db(), name)
@@ -194,6 +208,7 @@ def get_move(name: str) -> MoveOut:
 
 # ─── Ability endpoints ────────────────────────────────────────────────────────
 
+
 @router.get("/abilities/{name}", response_model=AbilityOut)
 def get_ability(name: str) -> AbilityOut:
     row = ability_repo.get_ability(get_db(), name)
@@ -203,6 +218,7 @@ def get_ability(name: str) -> AbilityOut:
 
 
 # ─── Nature endpoints ─────────────────────────────────────────────────────────
+
 
 @router.get("/natures", response_model=list[NatureOut])
 def list_natures() -> list[NatureOut]:
@@ -214,6 +230,7 @@ def list_natures() -> list[NatureOut]:
 
 
 # ─── Item endpoints ───────────────────────────────────────────────────────────
+
 
 @router.get("/items", response_model=list[ItemListItemOut])
 def list_items(
@@ -234,12 +251,16 @@ def get_item(name: str) -> ItemDetailOut:
     if not row:
         raise HTTPException(status_code=404, detail=f"Item '{name}' not found")
     return ItemDetailOut(
-        id=row.id, name=row.name, sprite_url=row.sprite_url,
-        category=row.category, flavor_text=row.flavor_text,
+        id=row.id,
+        name=row.name,
+        sprite_url=row.sprite_url,
+        category=row.category,
+        flavor_text=row.flavor_text,
     )
 
 
 # ─── Private helpers ──────────────────────────────────────────────────────────
+
 
 def _detail_to_out(d: pokemon_repo.PokemonDetail) -> PokemonDetailOut:
     return PokemonDetailOut(
@@ -275,4 +296,14 @@ def _detail_to_out(d: pokemon_repo.PokemonDetail) -> PokemonDetailOut:
             home=d.sprites.home,
         ),
         moves=[MoveEntryOut(name=m.name, method=m.method, level=m.level) for m in d.moves],
+        varieties=[
+            VarietyOut(
+                form_pokemon_id=v.form_pokemon_id,
+                form_name=v.form_name,
+                form_suffix=v.form_suffix,
+                display_name=v.display_name,
+                is_default=v.is_default,
+            )
+            for v in d.varieties
+        ],
     )

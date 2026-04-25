@@ -45,7 +45,9 @@ def _is_rate_limited(user_id: str) -> bool:
     _rate_windows[user_id].append(now)
     return len(_rate_windows[user_id]) > limit
 
+
 # ─── Stat calculation (level 50) ─────────────────────────────────────────────
+
 
 def _stat(base: int, iv: int, ev: int, *, is_hp: bool = False) -> int:
     inner = (2 * base + iv + ev // 4) * 50 // 100
@@ -60,11 +62,7 @@ async def _build_pokemon(slot: StoredSlot) -> PokemonBattleState:
     move_names = [n for n in slot.move_names if n]
     if move_names:
         move_rows = await asyncio.to_thread(move_repo.get_moves_bulk, get_db(), move_names)
-        moves = [
-            move_repo.to_move_slot(row)
-            for name in move_names
-            if (row := move_rows.get(name))
-        ]
+        moves = [move_repo.to_move_slot(row) for name in move_names if (row := move_rows.get(name))]
     else:
         moves = []
 
@@ -89,7 +87,7 @@ async def _build_pokemon(slot: StoredSlot) -> PokemonBattleState:
         special_defense=_stat(
             b.get("special_defense", 45),
             iv.get("special_defense", 31),
-            ev.get("special_defense", 0)
+            ev.get("special_defense", 0),
         ),
         speed=_stat(b.get("speed", 45), iv.get("speed", 31), ev.get("speed", 0)),
         types=slot.types or ["normal"],
@@ -99,13 +97,15 @@ async def _build_pokemon(slot: StoredSlot) -> PokemonBattleState:
 
 async def _fetch_team(team_id: str, user_id: str) -> list[PokemonBattleState]:
     result = await asyncio.to_thread(
-        lambda: get_db()
-        .table("teams")
-        .select("slots")
-        .eq("id", team_id)
-        .eq("user_id", user_id)
-        .single()
-        .execute()
+        lambda: (
+            get_db()
+            .table("teams")
+            .select("slots")
+            .eq("id", team_id)
+            .eq("user_id", user_id)
+            .single()
+            .execute()
+        )
     )
     slots_raw: list = (result.data or {}).get("slots", [])
 
@@ -126,25 +126,40 @@ async def _fetch_team(team_id: str, user_id: str) -> list[PokemonBattleState]:
 
 # ─── State serialization ──────────────────────────────────────────────────────
 
+
 def _ser_state(state: BattleState) -> dict:
     def ser_move(m: MoveSlot) -> dict:
-        return {"name": m.name, "power": m.power, "accuracy": m.accuracy,
-                "pp": m.pp, "type": m.type, "category": m.category}
+        return {
+            "name": m.name,
+            "power": m.power,
+            "accuracy": m.accuracy,
+            "pp": m.pp,
+            "type": m.type,
+            "category": m.category,
+        }
 
     def ser_mon(m: PokemonBattleState) -> dict:
         return {
-            "species_id": m.species_id, "name": m.name,
-            "current_hp": m.current_hp, "max_hp": m.max_hp,
-            "attack": m.attack, "defense": m.defense,
-            "special_attack": m.special_attack, "special_defense": m.special_defense,
-            "speed": m.speed, "types": m.types,
+            "species_id": m.species_id,
+            "name": m.name,
+            "current_hp": m.current_hp,
+            "max_hp": m.max_hp,
+            "attack": m.attack,
+            "defense": m.defense,
+            "special_attack": m.special_attack,
+            "special_defense": m.special_defense,
+            "speed": m.speed,
+            "types": m.types,
             "moves": [ser_move(mv) for mv in m.moves],
             "fainted": m.fainted,
         }
 
     def ser_player(p: PlayerState) -> dict:
-        return {"user_id": p.user_id, "active_index": p.active_index,
-                "team": [ser_mon(m) for m in p.team]}
+        return {
+            "user_id": p.user_id,
+            "active_index": p.active_index,
+            "team": [ser_mon(m) for m in p.team],
+        }
 
     return {
         "id": state.id,
@@ -159,15 +174,23 @@ def _ser_state(state: BattleState) -> dict:
 
 # ─── Battle result persistence ────────────────────────────────────────────────
 
+
 async def _save_result(state: BattleState) -> None:
     try:
         await asyncio.to_thread(
-            lambda: get_db().table("battles").insert({
-                "player1_id": state.player1.user_id,
-                "player2_id": state.player2.user_id,
-                "winner_id": state.winner_id,
-                "turns": state.turn,
-            }).execute()
+            lambda: (
+                get_db()
+                .table("battles")
+                .insert(
+                    {
+                        "player1_id": state.player1.user_id,
+                        "player2_id": state.player2.user_id,
+                        "winner_id": state.winner_id,
+                        "turns": state.turn,
+                    }
+                )
+                .execute()
+            )
         )
     except Exception:
         logger.exception("Failed to persist battle result for battle_id=%s", state.id)
@@ -237,10 +260,13 @@ async def _move_timeout(user_id: str, battle_id: str) -> None:
         logger.info(
             "Move timeout for user_id=%s in battle_id=%s — auto-forfeiting", user_id, battle_id
         )
-        await manager.send_to_user(user_id, {
-            "type": "error",
-            "message": "Move timeout — you took too long and forfeited.",
-        })
+        await manager.send_to_user(
+            user_id,
+            {
+                "type": "error",
+                "message": "Move timeout — you took too long and forfeited.",
+            },
+        )
         await _handle_forfeit(user_id, {"battle_id": battle_id})
     except asyncio.CancelledError:
         pass
@@ -269,6 +295,7 @@ def _opponent_id(state: BattleState, user_id: str) -> str:
 
 # ─── Message handlers ─────────────────────────────────────────────────────────
 
+
 async def _handle_join_queue(user_id: str, data: dict) -> None:
     team_id = data.get("team_id")
     if not team_id:
@@ -295,7 +322,8 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
     except Exception:
         logger.exception(
             "Failed to load teams for match (user1=%s, user2=%s) — re-queuing",
-            entry1.user_id, entry2.user_id,
+            entry1.user_id,
+            entry2.user_id,
         )
         enqueue(entry1.user_id, entry1.team_id)
         enqueue(entry2.user_id, entry2.team_id)
@@ -308,27 +336,35 @@ async def _handle_join_queue(user_id: str, data: dict) -> None:
     state = create_battle(entry1, entry2, team1, team2)
     logger.info(
         "Match found: battle_id=%s player1=%s player2=%s",
-        state.id, entry1.user_id, entry2.user_id,
+        state.id,
+        entry1.user_id,
+        entry2.user_id,
     )
 
     await manager.join_room(state.id, entry1.user_id)
     await manager.join_room(state.id, entry2.user_id)
 
     for uid, opp in [(entry1.user_id, entry2.user_id), (entry2.user_id, entry1.user_id)]:
-        await manager.send_to_user(uid, {
-            "type": "match_found",
-            "battle_id": state.id,
-            "opponent_id": opp,
-        })
+        await manager.send_to_user(
+            uid,
+            {
+                "type": "match_found",
+                "battle_id": state.id,
+                "opponent_id": opp,
+            },
+        )
 
     turn_started_at = _start_turn_timers(state.id, entry1.user_id, entry2.user_id)
 
-    await manager.broadcast_to_room(state.id, {
-        "type": "battle_start",
-        "battle_id": state.id,
-        "state": _ser_state(state),
-        "turn_started_at": turn_started_at,
-    })
+    await manager.broadcast_to_room(
+        state.id,
+        {
+            "type": "battle_start",
+            "battle_id": state.id,
+            "state": _ser_state(state),
+            "turn_started_at": turn_started_at,
+        },
+    )
 
 
 async def _handle_leave_queue(user_id: str) -> None:
@@ -364,12 +400,15 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
     active_mon = player.team[player.active_index]
     move_slot_int = int(move_slot)
     if move_slot_int < 0 or move_slot_int >= len(active_mon.moves):
-        await manager.send_to_user(user_id, {
-            "type": "error",
-            "message": (
-                f"Invalid move_slot {move_slot_int} (Pokémon has {len(active_mon.moves)} moves)"
-            ),
-        })
+        await manager.send_to_user(
+            user_id,
+            {
+                "type": "error",
+                "message": (
+                    f"Invalid move_slot {move_slot_int} (Pokémon has {len(active_mon.moves)} moves)"
+                ),
+            },
+        )
         return
 
     # Ignore duplicate moves from the same player
@@ -399,20 +438,28 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
     if result.battle_over:
         _turn_started_at.pop(battle_id, None)
         _cache_battle_end(result.new_state, "all_fainted")
-        await manager.broadcast_to_room(battle_id, {
-            "type": "turn_result",
-            "log": result.log_entries,
-            "state": _ser_state(result.new_state),
-        })
+        await manager.broadcast_to_room(
+            battle_id,
+            {
+                "type": "turn_result",
+                "log": result.log_entries,
+                "state": _ser_state(result.new_state),
+            },
+        )
         logger.info(
             "Battle ended: battle_id=%s winner=%s turns=%d",
-            battle_id, result.winner_id, result.new_state.turn,
+            battle_id,
+            result.winner_id,
+            result.new_state.turn,
         )
-        await manager.broadcast_to_room(battle_id, {
-            "type": "battle_end",
-            "winner_id": result.winner_id,
-            "reason": "all_fainted",
-        })
+        await manager.broadcast_to_room(
+            battle_id,
+            {
+                "type": "battle_end",
+                "winner_id": result.winner_id,
+                "reason": "all_fainted",
+            },
+        )
         await _save_result(result.new_state)
         await manager.leave_room(battle_id)
         remove_battle(battle_id)
@@ -420,12 +467,15 @@ async def _handle_make_move(user_id: str, data: dict) -> None:
         turn_started_at = _start_turn_timers(
             battle_id, result.new_state.player1.user_id, result.new_state.player2.user_id
         )
-        await manager.broadcast_to_room(battle_id, {
-            "type": "turn_result",
-            "log": result.log_entries,
-            "state": _ser_state(result.new_state),
-            "turn_started_at": turn_started_at,
-        })
+        await manager.broadcast_to_room(
+            battle_id,
+            {
+                "type": "turn_result",
+                "log": result.log_entries,
+                "state": _ser_state(result.new_state),
+                "turn_started_at": turn_started_at,
+            },
+        )
 
 
 async def _handle_forfeit(user_id: str, data: dict) -> None:
@@ -451,11 +501,14 @@ async def _handle_forfeit(user_id: str, data: dict) -> None:
 
     _turn_started_at.pop(battle_id, None)
     _cache_battle_end(state, "forfeit")
-    await manager.broadcast_to_room(battle_id, {
-        "type": "battle_end",
-        "winner_id": winner_id,
-        "reason": "forfeit",
-    })
+    await manager.broadcast_to_room(
+        battle_id,
+        {
+            "type": "battle_end",
+            "winner_id": winner_id,
+            "reason": "forfeit",
+        },
+    )
     await _save_result(state)
     await manager.leave_room(battle_id)
     remove_battle(battle_id)
@@ -469,17 +522,21 @@ async def _handle_disconnect(user_id: str) -> None:
         return
 
     logger.info("User disconnected from active battle: user_id=%s battle_id=%s", user_id, state.id)
-    await manager.send_to_user(_opponent_id(state, user_id), {
-        "type": "opponent_disconnected",
-        "message": (
-            f"Opponent disconnected. Waiting {settings.ws_grace_period_seconds}s for reconnect..."
-        ),
-    })
+    await manager.send_to_user(
+        _opponent_id(state, user_id),
+        {
+            "type": "opponent_disconnected",
+            "message": (
+                f"Opponent disconnected. Waiting {settings.ws_grace_period_seconds}s for reconnect."
+            ),
+        },
+    )
     task = asyncio.create_task(_grace_period(user_id, state.id))
     _pending_forfeits[user_id] = task
 
 
 # ─── Ticket endpoint ──────────────────────────────────────────────────────────
+
 
 @router.post("/ws/ticket")
 async def create_ws_ticket(user: UserIdDep) -> dict:
@@ -491,6 +548,7 @@ async def create_ws_ticket(user: UserIdDep) -> dict:
 
 
 # ─── WebSocket endpoint ───────────────────────────────────────────────────────
+
 
 @router.websocket("/ws/battle")
 async def battle_ws(
@@ -519,32 +577,44 @@ async def battle_ws(
         if pending_forfeit:
             # Reconnect: notify opponent and send current state
             logger.info("User reconnected to battle: user_id=%s battle_id=%s", user_id, existing.id)
-            await manager.send_to_user(_opponent_id(existing, user_id), {
-                "type": "opponent_reconnected",
-            })
-            await manager.send_to_user(user_id, {
-                "type": "battle_resumed",
-                "battle_id": existing.id,
-                "state": _ser_state(existing),
-                "turn_started_at": _turn_started_at.get(existing.id, time.time()),
-            })
+            await manager.send_to_user(
+                _opponent_id(existing, user_id),
+                {
+                    "type": "opponent_reconnected",
+                },
+            )
+            await manager.send_to_user(
+                user_id,
+                {
+                    "type": "battle_resumed",
+                    "battle_id": existing.id,
+                    "state": _ser_state(existing),
+                    "turn_started_at": _turn_started_at.get(existing.id, time.time()),
+                },
+            )
         else:
             # Fresh connect with an existing battle (e.g. page refresh mid-match)
-            await manager.send_to_user(user_id, {
-                "type": "battle_start",
-                "battle_id": existing.id,
-                "state": _ser_state(existing),
-                "turn_started_at": _turn_started_at.get(existing.id, time.time()),
-            })
+            await manager.send_to_user(
+                user_id,
+                {
+                    "type": "battle_start",
+                    "battle_id": existing.id,
+                    "state": _ser_state(existing),
+                    "turn_started_at": _turn_started_at.get(existing.id, time.time()),
+                },
+            )
     else:
         recent_end = _pop_recent_battle_end(user_id)
         if recent_end:
             # Battle ended while user was away — show them the result
-            await manager.send_to_user(user_id, {
-                "type": "battle_end",
-                "winner_id": recent_end["winner_id"],
-                "reason": recent_end["reason"],
-            })
+            await manager.send_to_user(
+                user_id,
+                {
+                    "type": "battle_end",
+                    "winner_id": recent_end["winner_id"],
+                    "reason": recent_end["reason"],
+                },
+            )
         elif is_queued(user_id):
             # User navigated away while in queue — restore queue state
             await manager.send_to_user(user_id, {"type": "queue_joined"})
@@ -571,10 +641,13 @@ async def battle_ws(
                 case "forfeit":
                     await _handle_forfeit(user_id, data)
                 case unknown:
-                    await manager.send_to_user(user_id, {
-                        "type": "error",
-                        "message": f"Unknown message type: {unknown!r}",
-                    })
+                    await manager.send_to_user(
+                        user_id,
+                        {
+                            "type": "error",
+                            "message": f"Unknown message type: {unknown!r}",
+                        },
+                    )
     except WebSocketDisconnect:
         pass
     finally:

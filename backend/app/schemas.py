@@ -20,11 +20,12 @@ class IVSpread(BaseModel):
     special_defense: Annotated[int, Field(ge=0, le=31)] = 31
     speed: Annotated[int, Field(ge=0, le=31)] = 31
 
+
 class BaseStats(BaseModel):
     hp: Annotated[int, Field(ge=1, le=255)] = 45
     attack: Annotated[int, Field(ge=1, le=255)] = 45
     defense: Annotated[int, Field(ge=1, le=255)] = 45
-    special_attack: Annotated[int, Field(ge=1, le=255)] = 45 
+    special_attack: Annotated[int, Field(ge=1, le=255)] = 45
     special_defense: Annotated[int, Field(ge=1, le=255)] = 45
     speed: Annotated[int, Field(ge=1, le=255)] = 45
 
@@ -37,7 +38,7 @@ class SerializedSlot(BaseModel):
     nature: str | None = None
     item_name: str | None = None
     move_names: list[str | None]
-    base_stats: BaseStats = Field(default_factory=EVSpread) 
+    base_stats: BaseStats = Field(default_factory=EVSpread)
     evs: EVSpread
     ivs: IVSpread = Field(default_factory=IVSpread)
 
@@ -56,6 +57,7 @@ class TeamRow(BaseModel):
 
 
 # ─── Battles ──────────────────────────────────────────────────────────────────
+
 
 class BattleRow(BaseModel):
     id: str
@@ -78,6 +80,7 @@ class BattleHistoryItem(BaseModel):
 
 
 # ─── Profiles ─────────────────────────────────────────────────────────────────
+
 
 class ProfileRow(BaseModel):
     id: str

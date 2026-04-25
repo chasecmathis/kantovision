@@ -1,4 +1,5 @@
 """Shared test object factories."""
+
 from app.battle.matchmaking import QueueEntry
 from app.battle.state import BattleState, MoveSlot, PlayerState, PokemonBattleState
 

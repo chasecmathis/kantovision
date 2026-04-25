@@ -1,4 +1,5 @@
 """Tests for the /pokemon, /moves, /abilities, /natures, /items endpoints."""
+
 from unittest.mock import patch
 
 import pytest
@@ -37,8 +38,9 @@ def _mock_pokemon_detail(pokemon_id: int = 1):
         ],
         types=[pokemon_repo.TypeSlot(slot=1, name="grass")],
         abilities=[pokemon_repo.AbilitySlot(name="overgrow", is_hidden=False)],
-        stats=pokemon_repo.Stats(hp=45, attack=49, defense=49,
-                                  special_attack=65, special_defense=65, speed=45),
+        stats=pokemon_repo.Stats(
+            hp=45, attack=49, defense=49, special_attack=65, special_defense=65, speed=45
+        ),
         sprites=pokemon_repo.Sprites(
             front_default="https://example.com/front.png",
             official_artwork="https://example.com/artwork.png",
@@ -53,7 +55,9 @@ class TestPokemonListEndpoint:
     def test_returns_200_with_list(self, client):
         list_rows = [
             pokemon_repo.PokemonListRow(
-                id=1, name="bulbasaur", generation=1,
+                id=1,
+                name="bulbasaur",
+                generation=1,
                 types=[pokemon_repo.TypeSlot(slot=1, name="grass")],
                 sprite_official_artwork="https://example.com/1.png",
             )
@@ -127,8 +131,14 @@ class TestEvolutionChainEndpoint:
 class TestMoveEndpoint:
     def test_returns_200_with_move(self, client):
         row = move_repo.MoveRow(
-            id=1, name="tackle", power=40, accuracy=100,
-            pp=35, type="normal", damage_class="physical", flavor_text="A tackle.",
+            id=1,
+            name="tackle",
+            power=40,
+            accuracy=100,
+            pp=35,
+            type="normal",
+            damage_class="physical",
+            flavor_text="A tackle.",
         )
         with patch.object(move_repo, "get_move", return_value=row):
             resp = client.get("/moves/tackle")
@@ -199,8 +209,11 @@ class TestItemsEndpoints:
 
     def test_detail_returns_200(self, client):
         row = item_repo.ItemRow(
-            id=1, name="potion", sprite_url="https://example.com/potion.png",
-            category="medicine", flavor_text="Restores 20 HP.",
+            id=1,
+            name="potion",
+            sprite_url="https://example.com/potion.png",
+            category="medicine",
+            flavor_text="Restores 20 HP.",
         )
         with patch.object(item_repo, "get_item", return_value=row):
             resp = client.get("/items/potion")

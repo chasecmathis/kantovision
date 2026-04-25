@@ -56,6 +56,7 @@ class BattleState:
 
 # ─── DB-stored team slot format (matches frontend serialization) ───────────────
 
+
 class StoredSlot(BaseModel):
     """Mirrors what the frontend serializes when saving a team to Supabase."""
 

@@ -10,6 +10,7 @@ from tests.helpers import make_pokemon
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+
 def _make_team():
     return [make_pokemon(name="Pikachu", hp=200, attack=100, defense=50, speed=90)]
 
@@ -38,6 +39,7 @@ def ws_client(ws_app):
 
 # ─── Connection & auth ────────────────────────────────────────────────────────
 
+
 class TestWebSocketAuth:
     def test_invalid_ticket_closes_with_4001(self, ws_client):
         with pytest.raises(Exception):
@@ -65,6 +67,7 @@ class TestWebSocketAuth:
 
 
 # ─── Queue messages ───────────────────────────────────────────────────────────
+
 
 class TestJoinQueue:
     def test_join_queue_without_team_id_returns_error(self, ws_client):
@@ -103,6 +106,7 @@ class TestLeaveQueue:
 
 # ─── Unknown messages ─────────────────────────────────────────────────────────
 
+
 class TestUnknownMessage:
     def test_unknown_type_returns_error(self, ws_client):
         ticket = issue_ticket(TEST_USER_1)
@@ -114,6 +118,7 @@ class TestUnknownMessage:
 
 
 # ─── Two-player match flow ────────────────────────────────────────────────────
+
 
 class TestMatchmakingFlow:
     def test_two_players_form_a_match(self, ws_app):
@@ -170,6 +175,7 @@ class TestMatchmakingFlow:
 
 # ─── Forfeit ─────────────────────────────────────────────────────────────────
 
+
 class TestForfeit:
     def test_forfeit_ends_battle(self, ws_app):
         ticket1 = issue_ticket(TEST_USER_1)
@@ -205,6 +211,7 @@ class TestForfeit:
 
 
 # ─── Make move ───────────────────────────────────────────────────────────────
+
 
 class TestMakeMove:
     def test_move_received_broadcast_on_first_move(self, ws_app):

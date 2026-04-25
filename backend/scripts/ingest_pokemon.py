@@ -32,11 +32,11 @@ logger = logging.getLogger(__name__)
 
 POKEAPI = "https://pokeapi.co/api/v2"
 CONCURRENCY = 50  # max simultaneous requests
-LOG_EVERY = 50    # log progress every N records
+LOG_EVERY = 50  # log progress every N records
 
 # Generation ID ranges (inclusive) per PokéAPI numbering
 _GEN_RANGES = [
-    (1, 151),    # Gen 1
+    (1, 151),  # Gen 1
     (152, 251),  # Gen 2
     (252, 386),  # Gen 3
     (387, 493),  # Gen 4
@@ -44,7 +44,7 @@ _GEN_RANGES = [
     (650, 721),  # Gen 6
     (722, 809),  # Gen 7
     (810, 905),  # Gen 8
-    (906, 1025), # Gen 9
+    (906, 1025),  # Gen 9
 ]
 
 
@@ -53,6 +53,87 @@ def _generation(pokemon_id: int) -> int:
         if lo <= pokemon_id <= hi:
             return gen
     return 9
+
+
+# ─── Form display helpers ─────────────────────────────────────────────────────
+
+_FORM_DISPLAY: dict[str, str] = {
+    "alola": "Alolan",
+    "alolan": "Alolan",
+    "galar": "Galarian",
+    "galarian": "Galarian",
+    "hisui": "Hisuian",
+    "hisuian": "Hisuian",
+    "paldea": "Paldean",
+    "paldean": "Paldean",
+    "mega": "Mega",
+    "mega-x": "Mega X",
+    "mega-y": "Mega Y",
+    "gmax": "Gigantamax",
+    "origin": "Origin Forme",
+    "sky": "Sky Forme",
+    "attack": "Attack Forme",
+    "defense": "Defense Forme",
+    "speed": "Speed Forme",
+    "heat": "Heat",
+    "wash": "Wash",
+    "frost": "Frost",
+    "fan": "Fan",
+    "mow": "Mow",
+    "baile": "Baile Style",
+    "pom-pom": "Pom-Pom Style",
+    "pa-u": "Pa'u Style",
+    "sensu": "Sensu Style",
+    "red-striped": "Red-Striped",
+    "blue-striped": "Blue-Striped",
+    "ice": "Ice Rider",
+    "shadow": "Shadow Rider",
+    "crowned": "Crowned",
+    "black": "Black",
+    "white": "White",
+    "resolute": "Resolute",
+    "pirouette": "Pirouette",
+    "10": "10%",
+    "50": "50%",
+    "complete": "Complete",
+    "midnight": "Midnight",
+    "dusk": "Dusk",
+    "dusk-mane": "Dusk Mane",
+    "dawn-wings": "Dawn Wings",
+    "ultra": "Ultra",
+    "school": "School",
+    "busted": "Busted",
+    "low-key": "Low Key",
+    "amped": "Amped",
+    "noice": "Ice Face",
+    "hangry": "Hangry",
+    "hero": "Hero",
+    "paldea-combat": "Combat Breed",
+    "paldea-blaze": "Blaze Breed",
+    "paldea-aqua": "Aqua Breed",
+}
+
+
+def _extract_form_suffix(form_name: str, species_name: str) -> str:
+    """Strip the species-name prefix to get the form suffix.
+    E.g., "graveler-alola" with species "graveler" → "alola".
+    Returns "" for the default form.
+    """
+    prefix = species_name + "-"
+    if form_name.startswith(prefix):
+        return form_name[len(prefix) :]
+    return ""
+
+
+def _format_form_display_name(form_suffix: str) -> str:
+    """Map a form suffix to a human-readable label."""
+    if not form_suffix:
+        return "Default"
+    label = _FORM_DISPLAY.get(form_suffix.lower())
+    if label:
+        return label
+    # Fallback: title-case hyphen-separated words
+    return " ".join(w.capitalize() for w in form_suffix.split("-"))
 
 
 def _clean_text(text: str | None) -> str | None:
@@ -91,6 +172,7 @@ def _flatten_chain(link: dict) -> list[dict]:
 
 # ─── Async fetch helpers ──────────────────────────────────────────────────────
 
+
 async def _get(client: httpx.AsyncClient, sem: asyncio.Semaphore, url: str) -> dict | None:
     async with sem:
         try:
@@ -110,6 +192,7 @@ async def _get_list(
 
 
 # ─── Domain ingestion functions ───────────────────────────────────────────────
+
 
 async def ingest_moves(client: httpx.AsyncClient, sem: asyncio.Semaphore, db: Any) -> None:
     logger.info("Fetching move list…")
@@ -282,8 +365,11 @@ async def ingest_pokemon(client: httpx.AsyncClient, sem: asyncio.Semaphore, db: 
                 "base_happiness": species.get("base_happiness"),
                 "flavor_text": _english(species.get("flavor_text_entries", [])),
                 "genus": next(
-                    (g["genus"] for g in species.get("genera", [])
-                     if (g.get("language") or {}).get("name") == "en"),
+                    (
+                        g["genus"]
+                        for g in species.get("genera", [])
+                        if (g.get("language") or {}).get("name") == "en"
+                    ),
                     None,
                 ),
                 "evolution_chain_id": evo_id,
@@ -297,8 +383,12 @@ async def ingest_pokemon(client: httpx.AsyncClient, sem: asyncio.Semaphore, db: 
                 for t in poke.get("types", [])
             ],
             "abilities": [
-                {"pokemon_id": poke_id, "ability_name": a["ability"]["name"],
-                 "is_hidden": a["is_hidden"], "slot": a["slot"]}
+                {
+                    "pokemon_id": poke_id,
+                    "ability_name": a["ability"]["name"],
+                    "is_hidden": a["is_hidden"],
+                    "slot": a["slot"],
+                }
                 for a in poke.get("abilities", [])
             ],
             "moves": [
@@ -311,6 +401,8 @@ async def ingest_pokemon(client: httpx.AsyncClient, sem: asyncio.Semaphore, db: 
                 for m in poke.get("moves", [])
                 for vgd in m.get("version_group_details", [])[:1]  # take first version group
             ],
+            # Raw varieties list from species endpoint — used by ingest_pokemon_varieties()
+            "varieties": species.get("varieties", []),
         }
 
     results = await _gather_raw(process, items)
@@ -336,6 +428,223 @@ async def ingest_pokemon(client: httpx.AsyncClient, sem: asyncio.Semaphore, db: 
 
     logger.info("Pokemon done.")
     return results
+
+
+async def ingest_pokemon_varieties(
+    client: httpx.AsyncClient,
+    sem: asyncio.Semaphore,
+    db: Any,
+    pokemon_results: list[dict | None],
+) -> list[dict | None]:
+    """
+    For every species that has >1 variety, fetch all alternate form Pokémon,
+    upsert them into pokemon/pokemon_types/pokemon_abilities, and populate
+    the pokemon_varieties linking table.
+
+    Returns a list of form-result dicts (same shape as pokemon_results, minus
+    the species-level fields) so their moves can be fed to ingest_learnable_moves.
+    """
+    # Collect tasks: one entry per non-default variety across all species.
+    #
+    # IMPORTANT: PokéAPI's /pokemon?limit=1100 already includes some alternate-form
+    # pokemon (IDs ≥ 10001) in its result set.  Those entries are processed by
+    # ingest_pokemon and stored in pokemon_results, but their species endpoint
+    # returns the SAME varieties list as their base species entry.  If we naively
+    # iterate all pokemon_results we'd schedule each form pokemon to be fetched and
+    # inserted a second time, producing duplicate rows within a single upsert chunk,
+    # which PostgreSQL rejects with "ON CONFLICT DO UPDATE command cannot affect row
+    # a second time".
+    #
+    # Fix: only schedule varieties from BASE pokemon entries (species ID < 10000).
+    # Also deduplicate by form_name in case the same form appears via multiple paths.
+
+    variety_task_dicts: list[dict] = []
+    seen_form_names: set[str] = set()
+    # Track which BASE species have multiple forms (to create default-form rows)
+    multi_form_species: list[dict] = []  # {species_id, species_name}
+    seen_species_ids: set[int] = set()
+
+    for r in pokemon_results:
+        if not r:
+            continue
+        species_id = r["pokemon_row"]["id"]
+        # Skip form pokemon entries that were already ingested by ingest_pokemon.
+        # Form pokemon have IDs ≥ 10000 in PokéAPI; base pokemon are 1–1025.
+        if species_id >= 10000:
+            continue
+        varieties = r.get("varieties", [])
+        if len(varieties) <= 1:
+            continue  # single-variety species — nothing to do
+        species_name = r["pokemon_row"]["name"]
+
+        # Guard against the same base species appearing twice (shouldn't happen,
+        # but harmless to be safe)
+        if species_id in seen_species_ids:
+            continue
+        seen_species_ids.add(species_id)
+
+        multi_form_species.append({"species_id": species_id, "species_name": species_name})
+        for v in varieties:
+            form_name: str = v["pokemon"]["name"]
+            if not v.get("is_default", False) and form_name not in seen_form_names:
+                seen_form_names.add(form_name)
+                variety_task_dicts.append(
+                    {
+                        "species_id": species_id,
+                        "species_name": species_name,
+                        "variety": v,
+                    }
+                )
+
+    if not variety_task_dicts:
+        logger.info("No alternate forms found — skipping variety ingestion.")
+        return []
+
+    logger.info(
+        "Fetching %d alternate-form Pokémon across %d species…",
+        len(variety_task_dicts),
+        len(multi_form_species),
+    )
+
+    async def process_form(task: dict) -> dict | None:
+        species_id: int = task["species_id"]
+        species_name: str = task["species_name"]
+        variety: dict = task["variety"]
+        form_name: str = variety["pokemon"]["name"]
+        form_url: str = variety["pokemon"]["url"]
+
+        poke = await _get(client, sem, form_url)
+        if not poke:
+            return None
+
+        poke_id: int = poke["id"]
+        stat_map: dict[str, int] = {
+            s["stat"]["name"]: s["base_stat"] for s in poke.get("stats", [])
+        }
+        sprites = poke.get("sprites") or {}
+        oa = (sprites.get("other") or {}).get("official-artwork") or {}
+        home_sprites = (sprites.get("other") or {}).get("home") or {}
+
+        form_suffix = _extract_form_suffix(form_name, species_name)
+        display_name = _format_form_display_name(form_suffix)
+
+        return {
+            "pokemon_row": {
+                "id": poke_id,
+                "name": form_name,
+                "generation": _generation(species_id),  # inherit species generation
+                "height": poke.get("height"),
+                "weight": poke.get("weight"),
+                "base_experience": poke.get("base_experience"),
+                "hp": stat_map.get("hp", 45),
+                "attack": stat_map.get("attack", 45),
+                "defense": stat_map.get("defense", 45),
+                "special_attack": stat_map.get("special-attack", 45),
+                "special_defense": stat_map.get("special-defense", 45),
+                "speed": stat_map.get("speed", 45),
+                "is_legendary": False,
+                "is_mythical": False,
+                "color": None,
+                "capture_rate": None,
+                "base_happiness": None,
+                "flavor_text": None,
+                "genus": None,
+                "evolution_chain_id": None,
+                "sprite_front": sprites.get("front_default"),
+                "sprite_official_artwork": oa.get("front_default"),
+                "sprite_shiny": oa.get("front_shiny"),
+                "sprite_home": home_sprites.get("front_default"),
+            },
+            "types": [
+                {"pokemon_id": poke_id, "type_name": t["type"]["name"], "slot": t["slot"]}
+                for t in poke.get("types", [])
+            ],
+            "abilities": [
+                {
+                    "pokemon_id": poke_id,
+                    "ability_name": a["ability"]["name"],
+                    "is_hidden": a["is_hidden"],
+                    "slot": a["slot"],
+                }
+                for a in poke.get("abilities", [])
+            ],
+            "moves": [
+                {
+                    "pokemon_id": poke_id,
+                    "move_name": m["move"]["name"],
+                    "learn_method": vgd["move_learn_method"]["name"],
+                    "min_level": vgd.get("level_learned_at") or None,
+                }
+                for m in poke.get("moves", [])
+                for vgd in m.get("version_group_details", [])[:1]
+            ],
+            "varieties": [],  # form pokemon don't have sub-varieties
+            "variety_row": {
+                "species_id": species_id,
+                "form_pokemon_id": poke_id,
+                "form_name": form_name,
+                "form_suffix": form_suffix,
+                "display_name": display_name,
+                "is_default": False,
+            },
+        }
+
+    form_results = await _gather_raw(process_form, variety_task_dicts)
+
+    # Upsert form Pokémon rows + their types/abilities
+    form_pokemon_rows = [r["pokemon_row"] for r in form_results if r]
+    form_type_rows = [t for r in form_results if r for t in r["types"]]
+    form_ability_rows = [a for r in form_results if r for a in r["abilities"]]
+
+    if form_pokemon_rows:
+        logger.info("Upserting %d form pokemon rows…", len(form_pokemon_rows))
+        _upsert_batch(db, "pokemon", form_pokemon_rows, LOG_EVERY)
+    if form_type_rows:
+        _upsert_batch(
+            db, "pokemon_types", form_type_rows, LOG_EVERY, conflict_col="pokemon_id,slot"
+        )
+    if form_ability_rows:
+        _upsert_batch(
+            db, "pokemon_abilities", form_ability_rows, LOG_EVERY, conflict_col="pokemon_id,slot"
+        )
+
+    # Build pokemon_varieties rows:
+    #   • One "Default" row per multi-form species pointing to the base pokemon.
+    #   • One row per freshly-fetched alternate form.
+    #
+    # Note: some alternate forms were already present in pokemon_results (because
+    # they appeared in PokéAPI's base list with IDs ≥ 10000).  We still need their
+    # variety rows, which were emitted as variety_row entries in form_results.
+    # Those forms' pokemon/types/abilities rows already exist in the DB, so
+    # upserting is safe (ON CONFLICT DO UPDATE is idempotent for existing rows).
+    variety_rows: list[dict] = []
+    for s in multi_form_species:
+        variety_rows.append(
+            {
+                "species_id": s["species_id"],
+                "form_pokemon_id": s["species_id"],  # default form points to itself
+                "form_name": s["species_name"],
+                "form_suffix": "",
+                "display_name": "Default",
+                "is_default": True,
+            }
+        )
+    for r in form_results:
+        if r:
+            variety_rows.append(r["variety_row"])
+
+    if variety_rows:
+        logger.info("Upserting %d pokemon_varieties rows…", len(variety_rows))
+        _upsert_batch(
+            db,
+            "pokemon_varieties",
+            variety_rows,
+            LOG_EVERY,
+            conflict_col="species_id,form_pokemon_id",
+        )
+
+    logger.info("Varieties done.")
+    return form_results
 
 
 async def ingest_learnable_moves(
@@ -369,12 +678,14 @@ async def ingest_learnable_moves(
                 skipped += 1
                 continue
             # Resolve move_id
-            move_rows.append({
-                "pokemon_id": poke_id,
-                "move_name": move_name,  # resolved to id in batch below
-                "learn_method": method,
-                "min_level": m.get("min_level"),
-            })
+            move_rows.append(
+                {
+                    "pokemon_id": poke_id,
+                    "move_name": move_name,  # resolved to id in batch below
+                    "learn_method": method,
+                    "min_level": m.get("min_level"),
+                }
+            )
 
     if skipped:
         logger.warning("Skipped %d learnable moves with unknown names", skipped)
@@ -387,22 +698,28 @@ async def ingest_learnable_moves(
     for r in move_rows:
         move_id = name_to_id.get(r["move_name"])
         if move_id:
-            resolved_rows.append({
-                "pokemon_id": r["pokemon_id"],
-                "move_id": move_id,
-                "learn_method": r["learn_method"],
-                "min_level": r["min_level"],
-            })
+            resolved_rows.append(
+                {
+                    "pokemon_id": r["pokemon_id"],
+                    "move_id": move_id,
+                    "learn_method": r["learn_method"],
+                    "min_level": r["min_level"],
+                }
+            )
 
     logger.info("Upserting %d learnable-move rows…", len(resolved_rows))
     _upsert_batch(
-        db, "pokemon_learnable_moves", resolved_rows, LOG_EVERY,
+        db,
+        "pokemon_learnable_moves",
+        resolved_rows,
+        LOG_EVERY,
         conflict_col="pokemon_id,move_id,learn_method",
     )
     logger.info("Learnable moves done.")
 
 
 # ─── Batch helpers ────────────────────────────────────────────────────────────
+
 
 async def _gather(fn, items: list[dict]) -> list[dict]:
     """Run fn(item) for each item, return non-None results."""
@@ -449,6 +766,7 @@ def _upsert_batch(
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
+
 async def main(env_file: str) -> None:
     loaded = load_dotenv(env_file, override=True)
     if loaded:
@@ -472,7 +790,20 @@ async def main(env_file: str) -> None:
         await ingest_natures(client, sem, db)
         await ingest_items(client, sem, db)
         pokemon_results = await ingest_pokemon(client, sem, db)
-        await ingest_learnable_moves(client, sem, db, pokemon_results)
+        form_results = await ingest_pokemon_varieties(client, sem, db, pokemon_results)
+        # Deduplicate by pokemon_id before passing to ingest_learnable_moves.
+        # pokemon_results may already contain some form pokemon (IDs ≥ 10000) that
+        # were in PokéAPI's initial 1100-entry list; form_results will not duplicate
+        # these because ingest_pokemon_varieties skips them, but we guard here anyway.
+        seen_move_ids: set[int] = set()
+        all_results: list[dict] = []
+        for r in pokemon_results + form_results:
+            if r:
+                pid = r["pokemon_row"]["id"]
+                if pid not in seen_move_ids:
+                    seen_move_ids.add(pid)
+                    all_results.append(r)
+        await ingest_learnable_moves(client, sem, db, all_results)
 
     logger.info("Ingestion complete.")
 

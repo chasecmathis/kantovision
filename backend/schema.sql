@@ -183,6 +183,25 @@ create table if not exists public.evolution_chains (
   chain  jsonb not null default '[]'::jsonb
 );
 
+-- Pokémon alternate forms (Alolan, Galarian, Mega, style variants, etc.)
+-- species_id    → the base/default Pokémon (e.g. 75 for Graveler)
+-- form_pokemon_id → the variant's own PokéAPI ID (e.g. 10032 for Alolan Graveler)
+-- Both varieties (including the default) are listed here so the frontend can
+-- show a complete form selector. Only rows exist when a species has >1 form.
+create table if not exists public.pokemon_varieties (
+  species_id       integer not null,
+  form_pokemon_id  integer not null,
+  form_name        text    not null,   -- full PokéAPI name: "graveler-alola"
+  form_suffix      text    not null,   -- URL param value:  "alola"  (empty for default)
+  display_name     text    not null,   -- human label:      "Alolan" ("Default" for base)
+  is_default       boolean not null default false,
+  primary key (species_id, form_pokemon_id),
+  constraint pv_species_fk foreign key (species_id)      references public.pokemon(id) on delete cascade,
+  constraint pv_form_fk    foreign key (form_pokemon_id) references public.pokemon(id) on delete cascade
+);
+
+create index if not exists pokemon_varieties_species_idx on public.pokemon_varieties(species_id);
+
 create index if not exists pokemon_types_pokemon_id_idx on public.pokemon_types(pokemon_id);
 create index if not exists pokemon_types_type_name_idx  on public.pokemon_types(type_name);
 create index if not exists pokemon_abilities_pokemon_id_idx on public.pokemon_abilities(pokemon_id);

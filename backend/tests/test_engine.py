@@ -5,6 +5,7 @@ from tests.helpers import make_battle_state, make_move, make_pokemon
 
 # ─── get_type_effectiveness ───────────────────────────────────────────────────
 
+
 class TestTypeEffectiveness:
     def test_neutral(self):
         assert get_type_effectiveness("normal", ["normal"]) == 1.0
@@ -40,6 +41,7 @@ class TestTypeEffectiveness:
 
 
 # ─── calc_damage ─────────────────────────────────────────────────────────────
+
 
 class TestCalcDamage:
     def test_basic_physical_damage(self):
@@ -103,6 +105,7 @@ class TestCalcDamage:
 
 
 # ─── resolve_turn ─────────────────────────────────────────────────────────────
+
 
 class TestResolveTurn:
     def test_faster_pokemon_goes_first(self):

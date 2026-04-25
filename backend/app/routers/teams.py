@@ -43,39 +43,21 @@ def create_team(body: SaveTeamRequest, user: UserIdDep) -> TeamRow:
 @router.put("/{team_id}")
 def update_team(team_id: str, body: SaveTeamRequest, user: UserIdDep) -> TeamRow:
     db = get_db()
-    existing = (
-        db.table("teams")
-        .select("id")
-        .eq("id", team_id)
-        .eq("user_id", user.id)
-        .execute()
-    )
+    existing = db.table("teams").select("id").eq("id", team_id).eq("user_id", user.id).execute()
     if not existing.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
     payload = {
         "name": body.name,
         "slots": [s.model_dump() if s else None for s in body.slots],
     }
-    result = (
-        db.table("teams")
-        .update(payload)
-        .eq("id", team_id)
-        .eq("user_id", user.id)
-        .execute()
-    )
+    result = db.table("teams").update(payload).eq("id", team_id).eq("user_id", user.id).execute()
     return result.data[0]
 
 
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_team(team_id: str, user: UserIdDep) -> None:
     db = get_db()
-    existing = (
-        db.table("teams")
-        .select("id")
-        .eq("id", team_id)
-        .eq("user_id", user.id)
-        .execute()
-    )
+    existing = db.table("teams").select("id").eq("id", team_id).eq("user_id", user.id).execute()
     if not existing.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
     db.table("teams").delete().eq("id", team_id).eq("user_id", user.id).execute()

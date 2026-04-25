@@ -1,4 +1,5 @@
 """Tests for app.repositories.move_repo."""
+
 from unittest.mock import MagicMock
 
 from app.battle.state import MoveSlot
@@ -23,8 +24,14 @@ def _make_db(data):
 class TestGetMove:
     def test_returns_move_row_when_found(self):
         row = {
-            "id": 1, "name": "tackle", "power": 40, "accuracy": 100,
-            "pp": 35, "type": "normal", "damage_class": "physical", "flavor_text": None,
+            "id": 1,
+            "name": "tackle",
+            "power": 40,
+            "accuracy": 100,
+            "pp": 35,
+            "type": "normal",
+            "damage_class": "physical",
+            "flavor_text": None,
         }
         db, _ = _make_db(row)
         result = get_move(db, "tackle")
@@ -40,8 +47,14 @@ class TestGetMove:
 
     def test_handles_nullable_power_and_accuracy(self):
         row = {
-            "id": 2, "name": "growl", "power": None, "accuracy": 100,
-            "pp": 40, "type": "normal", "damage_class": "status", "flavor_text": "Lowers ATK.",
+            "id": 2,
+            "name": "growl",
+            "power": None,
+            "accuracy": 100,
+            "pp": 40,
+            "type": "normal",
+            "damage_class": "status",
+            "flavor_text": "Lowers ATK.",
         }
         db, _ = _make_db(row)
         result = get_move(db, "growl")
@@ -53,10 +66,26 @@ class TestGetMove:
 class TestGetMovesBulk:
     def test_returns_dict_keyed_by_name(self):
         rows = [
-            {"id": 1, "name": "tackle", "power": 40, "accuracy": 100,
-             "pp": 35, "type": "normal", "damage_class": "physical", "flavor_text": None},
-            {"id": 2, "name": "ember", "power": 40, "accuracy": 100,
-             "pp": 25, "type": "fire", "damage_class": "special", "flavor_text": None},
+            {
+                "id": 1,
+                "name": "tackle",
+                "power": 40,
+                "accuracy": 100,
+                "pp": 35,
+                "type": "normal",
+                "damage_class": "physical",
+                "flavor_text": None,
+            },
+            {
+                "id": 2,
+                "name": "ember",
+                "power": 40,
+                "accuracy": 100,
+                "pp": 25,
+                "type": "fire",
+                "damage_class": "special",
+                "flavor_text": None,
+            },
         ]
         db, _ = _make_db(rows)
         result = get_moves_bulk(db, ["tackle", "ember"])
@@ -73,8 +102,16 @@ class TestGetMovesBulk:
 
     def test_missing_moves_not_in_result(self):
         rows = [
-            {"id": 1, "name": "tackle", "power": 40, "accuracy": 100,
-             "pp": 35, "type": "normal", "damage_class": "physical", "flavor_text": None},
+            {
+                "id": 1,
+                "name": "tackle",
+                "power": 40,
+                "accuracy": 100,
+                "pp": 35,
+                "type": "normal",
+                "damage_class": "physical",
+                "flavor_text": None,
+            },
         ]
         db, _ = _make_db(rows)
         result = get_moves_bulk(db, ["tackle", "nonexistent"])
@@ -89,8 +126,16 @@ class TestGetMovesBulk:
 
 class TestToMoveSlot:
     def test_converts_row_to_move_slot(self):
-        row = MoveRow(id=1, name="flamethrower", power=90, accuracy=100,
-                      pp=15, type="fire", damage_class="special", flavor_text=None)
+        row = MoveRow(
+            id=1,
+            name="flamethrower",
+            power=90,
+            accuracy=100,
+            pp=15,
+            type="fire",
+            damage_class="special",
+            flavor_text=None,
+        )
         slot = to_move_slot(row)
         assert isinstance(slot, MoveSlot)
         assert slot.name == "flamethrower"
@@ -99,13 +144,29 @@ class TestToMoveSlot:
         assert slot.category == "special"
 
     def test_defaults_none_power_to_50(self):
-        row = MoveRow(id=2, name="growl", power=None, accuracy=100,
-                      pp=40, type="normal", damage_class="status", flavor_text=None)
+        row = MoveRow(
+            id=2,
+            name="growl",
+            power=None,
+            accuracy=100,
+            pp=40,
+            type="normal",
+            damage_class="status",
+            flavor_text=None,
+        )
         slot = to_move_slot(row)
         assert slot.power == 50
 
     def test_defaults_none_accuracy_to_100(self):
-        row = MoveRow(id=3, name="swift", power=60, accuracy=None,
-                      pp=20, type="normal", damage_class="special", flavor_text=None)
+        row = MoveRow(
+            id=3,
+            name="swift",
+            power=60,
+            accuracy=None,
+            pp=20,
+            type="normal",
+            damage_class="special",
+            flavor_text=None,
+        )
         slot = to_move_slot(row)
         assert slot.accuracy == 100

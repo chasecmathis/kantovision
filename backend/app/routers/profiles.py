@@ -25,11 +25,17 @@ def create_profile(body: CreateProfileRequest, user: UserIdDep) -> ProfileRow:
             status_code=status.HTTP_400_BAD_REQUEST, detail="Profile already exists"
         )
     try:
-        result = db.table("profiles").insert({
-            "id": user.id,
-            "username": body.username,
-            "display_name": body.display_name,
-        }).execute()
+        result = (
+            db.table("profiles")
+            .insert(
+                {
+                    "id": user.id,
+                    "username": body.username,
+                    "display_name": body.display_name,
+                }
+            )
+            .execute()
+        )
     except Exception as e:
         msg = str(e).lower()
         if "duplicate" in msg or "unique" in msg:
@@ -45,10 +51,7 @@ def create_profile(body: CreateProfileRequest, user: UserIdDep) -> ProfileRow:
 def update_profile(body: UpdateProfileRequest, user: UserIdDep) -> ProfileRow:
     db = get_db()
     result = (
-        db.table("profiles")
-        .update({"display_name": body.display_name})
-        .eq("id", user.id)
-        .execute()
+        db.table("profiles").update({"display_name": body.display_name}).eq("id", user.id).execute()
     )
     if not result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")

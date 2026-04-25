@@ -7,7 +7,7 @@ import { TeamAnalysisPanel } from "@/src/components/team/TeamAnalysisPanel";
 import { PokemonPickerModal } from "@/src/components/team/PokemonPickerModal";
 import { SaveTeamModal } from "@/src/components/team/SaveTeamModal";
 import { LoadTeamsPanel } from "@/src/components/team/LoadTeamsPanel";
-import { type Team, type TeamMember, type Pokemon, createTeamMember } from "@/src/lib/pokeapi";
+import { type Team, type TeamMember, type Pokemon, createTeamMember, fetchPokemon } from "@/src/lib/pokeapi";
 import type { SavedTeam } from "@/src/lib/api";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { Save, FolderOpen, LogIn, X, ChevronDown } from "lucide-react";
@@ -17,6 +17,7 @@ export default function TeamPage() {
   const [team, setTeam] = useState<Team>(Array(6).fill(null));
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [switchingFormSlot, setSwitchingFormSlot] = useState<number | null>(null);
 
   // Auth-gated panels
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -43,6 +44,42 @@ export default function TeamPage() {
       })
     );
     setPickerOpen(false);
+  }
+
+  async function handleFormSwitch(slotIndex: number, formName: string | null) {
+    const member = team[slotIndex];
+    if (!member) return;
+
+    // Find the target pokemon ID — null formName means revert to the base/default form
+    const targetId = formName === null
+      ? member.pokemon.varieties?.find((v) => v.isDefault)?.formPokemonId ?? member.pokemon.id
+      : member.pokemon.varieties?.find((v) => v.formName === formName)?.formPokemonId;
+
+    if (targetId === undefined) return;
+
+    setSwitchingFormSlot(slotIndex);
+    try {
+      const formPokemon = await fetchPokemon(targetId);
+      setTeam((prev) =>
+        prev.map((m, i) => {
+          if (i !== slotIndex || !m) return m;
+          return {
+            ...m,
+            pokemon: {
+              ...formPokemon,
+              // Carry over the varieties list from the previous pokemon so the
+              // switcher stays visible after a form change
+              varieties: m.pokemon.varieties,
+            },
+            abilityName: formPokemon.abilities[0]?.ability.name ?? "",
+            moveNames: [null, null, null, null],
+            formName,
+          };
+        })
+      );
+    } finally {
+      setSwitchingFormSlot(null);
+    }
   }
 
   function handleRemoveSlot(i: number) {
@@ -172,6 +209,8 @@ export default function TeamPage() {
             slotIndex={activeSlotIndex}
             onOpenPicker={() => setPickerOpen(true)}
             onUpdate={(updater) => handleUpdateMember(activeSlotIndex, updater)}
+            onFormSwitch={(formName) => handleFormSwitch(activeSlotIndex, formName)}
+            isSwitchingForm={switchingFormSlot === activeSlotIndex}
           />
         </div>
 

@@ -1,4 +1,5 @@
 """Tests for the matchmaking queue."""
+
 from app.battle.matchmaking import (
     dequeue,
     enqueue,
@@ -24,7 +25,11 @@ class TestEnqueue:
         enqueue("user-1", "team-new")
         # Should still be in the queue exactly once
         assert queue_position("user-1") != 0
-        entry, = (e for e in __import__("app.battle.matchmaking", fromlist=["_queue"])._queue if e.user_id == "user-1")  # noqa: E501
+        (entry,) = (
+            e
+            for e in __import__("app.battle.matchmaking", fromlist=["_queue"])._queue
+            if e.user_id == "user-1"
+        )  # noqa: E501
         assert entry.team_id == "team-new"
 
 

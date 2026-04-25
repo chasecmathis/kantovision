@@ -1,11 +1,13 @@
 "use client";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ChevronLeft, ChevronRight, Star, Shield, Sword, Zap } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Star, Shield, Zap } from "lucide-react";
 import { usePokemon } from "@/src/hooks/usePokemon";
 import { TypeBadge } from "@/src/components/pokemon/TypeBadge";
 import { StatBar } from "@/src/components/pokemon/StatBar";
+import { FormSelector } from "@/src/components/pokemon/FormSelector";
 import {
   getOfficialArtwork,
   formatPokemonName,
@@ -51,15 +53,41 @@ function EffectivenessSection({ types }: { types: string[] }) {
   );
 }
 
-export default function DetailPage() {
+function DetailContent() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const pokemonId = parseInt(id, 10);
 
-  const pokemonQuery = usePokemon(pokemonId);
-  const pokemon = pokemonQuery.data;
+  const formSuffix = searchParams.get("form"); // "alola" or null
 
-  if (pokemonQuery.isLoading) {
+  // Always fetch the base (species) pokemon — it carries the varieties list
+  const baseQuery = usePokemon(pokemonId);
+  const basePokemon = baseQuery.data;
+
+  // Find the selected variety by its suffix
+  const activeVariety =
+    formSuffix && basePokemon?.varieties
+      ? basePokemon.varieties.find((v) => v.formSuffix === formSuffix) ?? null
+      : null;
+
+  // Fetch the form's own pokemon data when a non-default form is active
+  const formQuery = usePokemon(activeVariety?.formPokemonId ?? 0);
+
+  // Display the form-specific data if loaded; fall back to base while loading
+  const pokemon = activeVariety && formQuery.data ? formQuery.data : basePokemon;
+
+  const isLoading = baseQuery.isLoading || (!!activeVariety && formQuery.isLoading);
+
+  function handleFormSelect(suffix: string | null) {
+    if (!suffix) {
+      router.replace(`/pokedex/${pokemonId}`, { scroll: false });
+    } else {
+      router.replace(`/pokedex/${pokemonId}?form=${suffix}`, { scroll: false });
+    }
+  }
+
+  if (isLoading) {
     return (
       <div className="max-w-5xl mx-auto px-6 py-12 animate-pulse">
         <div className="h-8 w-32 rounded shimmer mb-8" />
@@ -78,12 +106,16 @@ export default function DetailPage() {
 
   const types = pokemon.types.map((t) => t.type.name);
   const gradient = getTypeGradient(types);
-  const artwork = getOfficialArtwork(pokemon.id);
+  // Use the sprite stored in the backend (form-aware) rather than constructing by ID
+  const artwork = getOfficialArtwork(pokemon.sprites);
   const flavorText = pokemon.flavor_text ?? "";
   const genus = pokemon.genus ?? "";
   const evolutions = pokemon.evolution_chain;
 
   const totalStats = pokemon.stats.reduce((s, st) => s + st.base_stat, 0);
+
+  // Key for artwork + stats re-animation: changes on form switch to trigger animate-fade-in
+  const animationKey = activeVariety ? activeVariety.formPokemonId : pokemonId;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -127,7 +159,7 @@ export default function DetailPage() {
             }}
           >
             <div
-              className="absolute inset-0"
+              className="absolute inset-0 transition-all duration-500"
               style={{ background: gradient, opacity: 0.4 }}
             />
             {/* Decorative ring */}
@@ -140,7 +172,8 @@ export default function DetailPage() {
               style={{ borderColor: TYPE_COLORS[types[0]] }}
             />
 
-            <div className="relative w-52 h-52">
+            {/* key prop triggers animate-fade-in CSS keyframe on form switch */}
+            <div key={animationKey} className="relative w-52 h-52 animate-fade-in">
               <Image
                 src={artwork}
                 alt={pokemon.name}
@@ -191,21 +224,34 @@ export default function DetailPage() {
         <div className="md:col-span-3 space-y-5">
           {/* Header */}
           <div>
-            <p className="poke-id mb-1">#{padId(pokemon.id)}</p>
+            <p className="poke-id mb-1">#{padId(pokemonId)}</p>
             <h1
               className="text-4xl font-black text-text-primary leading-none"
               style={{ fontFamily: "var(--font-unbounded)" }}
             >
-              {formatPokemonName(pokemon.name).toUpperCase()}
+              {formatPokemonName(basePokemon?.name ?? pokemon.name).toUpperCase()}
             </h1>
             {genus && (
               <p className="text-text-secondary text-sm mt-1">{genus}</p>
             )}
+
+            {/* Type badges — update from active form data */}
             <div className="flex gap-2 mt-3">
               {types.map((t) => (
                 <TypeBadge key={t} type={t} size="lg" />
               ))}
             </div>
+
+            {/* Form selector — always uses base pokemon's varieties list */}
+            {basePokemon?.varieties && basePokemon.varieties.length > 1 && (
+              <div className="mt-3">
+                <FormSelector
+                  varieties={basePokemon.varieties}
+                  activeFormSuffix={formSuffix}
+                  onSelect={handleFormSelect}
+                />
+              </div>
+            )}
           </div>
 
           {/* Flavor text */}
@@ -237,10 +283,10 @@ export default function DetailPage() {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Stats — key triggers re-animation on form switch */}
           <div>
             <SectionTitle>Base Stats</SectionTitle>
-            <div className="space-y-2">
+            <div key={`stats-${animationKey}`} className="space-y-2">
               {pokemon.stats.map((s, i) => (
                 <StatBar
                   key={s.stat.name}
@@ -296,6 +342,25 @@ export default function DetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-5xl mx-auto px-6 py-12 animate-pulse">
+        <div className="h-8 w-32 rounded shimmer mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="h-80 rounded-2xl shimmer" />
+          <div className="space-y-4">
+            <div className="h-10 w-48 rounded shimmer" />
+            <div className="h-4 w-64 rounded shimmer" />
+          </div>
+        </div>
+      </div>
+    }>
+      <DetailContent />
+    </Suspense>
   );
 }
 

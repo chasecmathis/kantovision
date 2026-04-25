@@ -16,12 +16,15 @@ import {
 } from "@/src/lib/pokeapi";
 import { getTypeGradient } from "@/src/lib/typeColors";
 import { padId } from "@/src/lib/utils";
+import { FormSwitcher } from "./FormSwitcher";
 
 interface MemberEditorProps {
   member: TeamMember | null;
   slotIndex: number;
   onOpenPicker: () => void;
   onUpdate: (updater: (m: TeamMember) => TeamMember) => void;
+  onFormSwitch?: (formName: string | null) => void;
+  isSwitchingForm?: boolean;
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -38,7 +41,14 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function MemberEditor({ member, slotIndex, onOpenPicker, onUpdate }: MemberEditorProps) {
+export function MemberEditor({
+  member,
+  slotIndex,
+  onOpenPicker,
+  onUpdate,
+  onFormSwitch,
+  isSwitchingForm = false,
+}: MemberEditorProps) {
   if (!member) {
     return (
       <div className="h-full min-h-80 flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-bg-border bg-bg-surface/50 p-8">
@@ -93,6 +103,19 @@ export function MemberEditor({ member, slotIndex, onOpenPicker, onUpdate }: Memb
             <div className="flex gap-1.5 mt-2">
               {types.map((t) => <TypeBadge key={t} type={t} size="md" />)}
             </div>
+
+            {/* Form switcher — only shown for multi-form species */}
+            {pokemon.varieties && pokemon.varieties.length > 1 && onFormSwitch && (
+              <div className="mt-2">
+                <FormSwitcher
+                  varieties={pokemon.varieties}
+                  currentFormName={member.formName}
+                  isLoading={isSwitchingForm}
+                  onSwitch={onFormSwitch}
+                />
+              </div>
+            )}
+
             <p className="text-[10px] text-text-muted mt-1" style={{ fontFamily: "var(--font-jetbrains)" }}>
               BST {bst} · H{pokemon.height / 10}m · W{pokemon.weight / 10}kg
             </p>

@@ -1,4 +1,5 @@
 """Tests for app.repositories.pokemon_repo."""
+
 from unittest.mock import MagicMock
 
 from app.repositories.pokemon_repo import (
@@ -19,8 +20,12 @@ def _minimal_pokemon_row(pokemon_id: int = 1) -> dict:
         "height": 7,
         "weight": 69,
         "base_experience": 64,
-        "hp": 45, "attack": 49, "defense": 49,
-        "special_attack": 65, "special_defense": 65, "speed": 45,
+        "hp": 45,
+        "attack": 49,
+        "defense": 49,
+        "special_attack": 65,
+        "special_defense": 65,
+        "speed": 45,
         "is_legendary": False,
         "is_mythical": False,
         "color": "green",
@@ -84,10 +89,12 @@ def _make_list_db(data, type_data=None):
     type_chain.execute.return_value = MagicMock(data=type_data)
 
     db = MagicMock()
+
     def _table(name):
         if name == "pokemon_types":
             return type_chain
         return pokemon_chain
+
     db.table.side_effect = _table
     return db
 
@@ -167,12 +174,16 @@ class TestGetPokemonList:
     def test_returns_list_of_rows(self):
         rows = [
             {
-                "id": 1, "name": "bulbasaur", "generation": 1,
+                "id": 1,
+                "name": "bulbasaur",
+                "generation": 1,
                 "sprite_official_artwork": "https://example.com/1.png",
                 "pokemon_types": [{"type_name": "grass", "slot": 1}],
             },
             {
-                "id": 4, "name": "charmander", "generation": 1,
+                "id": 4,
+                "name": "charmander",
+                "generation": 1,
                 "sprite_official_artwork": "https://example.com/4.png",
                 "pokemon_types": [{"type_name": "fire", "slot": 1}],
             },
@@ -192,6 +203,7 @@ class TestGetPokemonList:
     def test_type_filter_returns_empty_on_no_intersection(self):
         # Two types with no shared pokemon_ids
         call_count = [0]
+
         def type_data_for_call():
             call_count[0] += 1
             if call_count[0] == 1:
@@ -220,9 +232,9 @@ class TestGetPokemonList:
 
 class TestGetEvolutionChain:
     def test_returns_entries_when_found(self):
-        db = _make_single_db({
-            "chain": [{"id": 1, "name": "bulbasaur"}, {"id": 2, "name": "ivysaur"}]
-        })
+        db = _make_single_db(
+            {"chain": [{"id": 1, "name": "bulbasaur"}, {"id": 2, "name": "ivysaur"}]}
+        )
         result = get_evolution_chain(db, 1)
         assert result is not None
         assert len(result) == 2

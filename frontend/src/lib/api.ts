@@ -37,6 +37,8 @@ export interface SerializedSlot {
     special_defense: number;
     speed: number;
   };
+  // null = default form; "graveler-alola" = Alolan Graveler
+  form_name: string | null;
 }
 
 export interface SavedTeam {
@@ -143,6 +145,7 @@ export function serializeTeam(team: Team): (SerializedSlot | null)[] {
       move_names: m.moveNames,
       evs: serializeEvs(m.evs),
       ivs: serializeIvs(m.ivs),
+      form_name: m.formName ?? null,
     };
   });
 }

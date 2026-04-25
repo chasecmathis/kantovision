@@ -17,10 +17,10 @@ _POKEMON_DETAIL_SELECT = (
 )
 
 _POKEMON_LIST_SELECT = (
-    "id, name, generation, "
-    "sprite_official_artwork, "
-    "pokemon_types(type_name, slot)"
+    "id, name, generation, sprite_official_artwork, pokemon_types(type_name, slot)"
 )
+
+_POKEMON_VARIETIES_SELECT = "form_pokemon_id, form_name, form_suffix, display_name, is_default"
 
 
 @dataclass
@@ -67,6 +67,15 @@ class EvolutionEntry:
 
 
 @dataclass
+class VarietyRow:
+    form_pokemon_id: int
+    form_name: str  # "graveler-alola"
+    form_suffix: str  # "alola" (empty string for default)
+    display_name: str  # "Alolan" / "Default"
+    is_default: bool
+
+
+@dataclass
 class PokemonDetail:
     id: int
     name: str
@@ -88,6 +97,7 @@ class PokemonDetail:
     stats: Stats
     sprites: Sprites
     moves: list[MoveEntry] = field(default_factory=list)
+    varieties: list[VarietyRow] = field(default_factory=list)
 
 
 @dataclass
@@ -97,6 +107,7 @@ class PokemonListRow:
     generation: int
     types: list[TypeSlot]
     sprite_official_artwork: str | None
+    varieties_count: int = 0
 
 
 def _parse_detail(d: dict) -> PokemonDetail:
@@ -171,7 +182,30 @@ def get_pokemon(db: Client, pokemon_id: int) -> PokemonDetail | None:
     )
     if not result.data:
         return None
-    return _parse_detail(result.data)
+
+    # Fetch varieties separately to avoid FK-ambiguity in embedded PostgREST joins
+    # (pokemon_varieties has two FKs to pokemon: species_id and form_pokemon_id)
+    varieties_result = (
+        db.table("pokemon_varieties")
+        .select(_POKEMON_VARIETIES_SELECT)
+        .eq("species_id", pokemon_id)
+        .order("is_default", desc=True)  # default form first
+        .execute()
+    )
+    varieties = [
+        VarietyRow(
+            form_pokemon_id=v["form_pokemon_id"],
+            form_name=v["form_name"],
+            form_suffix=v["form_suffix"],
+            display_name=v["display_name"],
+            is_default=v["is_default"],
+        )
+        for v in (varieties_result.data or [])
+    ]
+
+    detail = _parse_detail(result.data)
+    detail.varieties = varieties
+    return detail
 
 
 def get_pokemon_list(
@@ -189,10 +223,7 @@ def get_pokemon_list(
     if types:
         for type_name in types:
             res = (
-                db.table("pokemon_types")
-                .select("pokemon_id")
-                .eq("type_name", type_name)
-                .execute()
+                db.table("pokemon_types").select("pokemon_id").eq("type_name", type_name).execute()
             )
             ids = {r["pokemon_id"] for r in (res.data or [])}
             filtered_ids = ids if filtered_ids is None else filtered_ids & ids
@@ -209,8 +240,24 @@ def get_pokemon_list(
 
     result = query.order("id").range(offset, offset + limit - 1).execute()
 
+    raw_rows = result.data or []
+
+    # Fetch variety counts in a single batch query
+    species_ids = [d["id"] for d in raw_rows]
+    variety_counts: dict[int, int] = {}
+    if species_ids:
+        vc_result = (
+            db.table("pokemon_varieties")
+            .select("species_id")
+            .in_("species_id", species_ids)
+            .execute()
+        )
+        for r in vc_result.data or []:
+            sid = r["species_id"]
+            variety_counts[sid] = variety_counts.get(sid, 0) + 1
+
     rows = []
-    for d in (result.data or []):
+    for d in raw_rows:
         rows.append(
             PokemonListRow(
                 id=d["id"],
@@ -224,6 +271,7 @@ def get_pokemon_list(
                     ],
                     key=lambda t: t.slot,
                 ),
+                varieties_count=variety_counts.get(d["id"], 0),
             )
         )
     return rows
@@ -231,11 +279,7 @@ def get_pokemon_list(
 
 def get_evolution_chain(db: Client, chain_id: int) -> list[EvolutionEntry] | None:
     result = (
-        db.table("evolution_chains")
-        .select("chain")
-        .eq("id", chain_id)
-        .maybe_single()
-        .execute()
+        db.table("evolution_chains").select("chain").eq("id", chain_id).maybe_single().execute()
     )
     if not result.data:
         return None

@@ -27,6 +27,14 @@ export interface PokemonAbility {
   is_hidden: boolean;
 }
 
+export interface PokemonVariety {
+  formPokemonId: number;  // PokéAPI ID of the form (e.g. 10032 for Alolan Graveler)
+  formName: string;       // "graveler-alola"
+  formSuffix: string;     // "alola" — used as the ?form= URL param (empty for default)
+  displayName: string;    // "Alolan" / "Default"
+  isDefault: boolean;
+}
+
 export interface Pokemon {
   id: number;
   name: string;
@@ -50,6 +58,10 @@ export interface Pokemon {
   flavor_text: string | null;
   genus: string | null;
   evolution_chain: { id: number; name: string }[];
+  // Present on detail fetches when the species has >1 form; absent on list fetches
+  varieties?: PokemonVariety[];
+  // Populated on list fetches to show a "+N forms" badge; absent on detail fetches
+  varietiesCount?: number;
 }
 
 export interface PokemonSpecies {
@@ -146,6 +158,8 @@ export interface TeamMember {
   moveNames: (string | null)[];
   evs: EVSpread;
   ivs: IVSpread;
+  // null = default form; "graveler-alola" = Alolan Graveler
+  formName: string | null;
 }
 
 export type Team = (TeamMember | null)[];
@@ -185,6 +199,13 @@ interface _BackendPokemon {
     home: string | null;
   };
   moves: { name: string; method: string; level: number | null }[];
+  varieties?: {
+    form_pokemon_id: number;
+    form_name: string;
+    form_suffix: string;
+    display_name: string;
+    is_default: boolean;
+  }[];
 }
 
 // ─── Transformation helpers ───────────────────────────────────────────────────
@@ -244,6 +265,15 @@ function _toPokemon(d: _BackendPokemon): Pokemon {
     flavor_text: d.flavor_text,
     genus: d.genus,
     evolution_chain: d.evolution_chain,
+    varieties: d.varieties?.length
+      ? d.varieties.map((v) => ({
+          formPokemonId: v.form_pokemon_id,
+          formName: v.form_name,
+          formSuffix: v.form_suffix,
+          displayName: v.display_name,
+          isDefault: v.is_default,
+        }))
+      : undefined,
   };
 }
 
@@ -303,7 +333,14 @@ export async function fetchPokemonList(limit = 151, offset = 0): Promise<Pokemon
 export async function fetchPokedexList(limit: number, offset: number): Promise<Pokemon[]> {
   const res = await fetch(`${BACKEND_BASE}/pokemon?limit=${limit}&offset=${offset}`);
   if (!res.ok) throw new Error("Failed to fetch pokedex list");
-  const data: { id: number; name: string; generation: number; types: { slot: number; name: string }[]; sprite_official_artwork: string | null }[] = await res.json();
+  const data: {
+    id: number;
+    name: string;
+    generation: number;
+    types: { slot: number; name: string }[];
+    sprite_official_artwork: string | null;
+    varieties_count: number;
+  }[] = await res.json();
   return data.map((d) => ({
     id: d.id,
     name: d.name,
@@ -326,6 +363,7 @@ export async function fetchPokedexList(limit: number, offset: number): Promise<P
     flavor_text: null,
     genus: null,
     evolution_chain: [],
+    varietiesCount: d.varieties_count > 0 ? d.varieties_count : undefined,
   }));
 }
 
@@ -537,5 +575,6 @@ export function createTeamMember(pokemon: Pokemon): TeamMember {
     moveNames: [null, null, null, null],
     evs: defaultEVs(),
     ivs: defaultIVs(),
+    formName: null,
   };
 }
