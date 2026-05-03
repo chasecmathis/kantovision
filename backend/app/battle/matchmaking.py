@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import time
 from collections import deque
-from dataclasses import dataclass, field
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-@dataclass
-class QueueEntry:
+class QueueEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     user_id: str
     team_id: str
-    joined_at: float = field(default_factory=time.time)
+    joined_at: float = Field(default_factory=time.time)
 
 
 _queue: deque[QueueEntry] = deque()

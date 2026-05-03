@@ -13,10 +13,12 @@ from starlette.testclient import TestClient  # noqa: E402
 
 import app.battle.manager as battle_manager  # noqa: E402
 import app.battle.matchmaking as matchmaking  # noqa: E402
+import app.sockets.caches as caches_mod  # noqa: E402
+import app.sockets.rate_limiter as rate_limiter_mod  # noqa: E402
 import app.sockets.tickets as tickets_mod  # noqa: E402
+import app.sockets.timers as timers_mod  # noqa: E402
 from app.dependencies import get_current_user_id  # noqa: E402
 from app.main import create_app  # noqa: E402
-from app.sockets import battle as battle_socket  # noqa: E402
 from app.sockets.connections import manager as ws_manager  # noqa: E402
 
 TEST_USER_1 = "user-aaaa-1111-1111-111111111111"
@@ -38,15 +40,9 @@ def reset_global_state():
     tickets_mod._reset_for_testing()
     ws_manager._rooms.clear()
     ws_manager._sockets.clear()
-    for task in list(battle_socket._pending_forfeits.values()):
-        task.cancel()
-    battle_socket._pending_forfeits.clear()
-    for task in list(battle_socket._move_timeouts.values()):
-        task.cancel()
-    battle_socket._move_timeouts.clear()
-    battle_socket._rate_windows.clear()
-    battle_socket._recent_battle_ends.clear()
-    battle_socket._turn_started_at.clear()
+    timers_mod._reset_for_testing()
+    rate_limiter_mod._reset_for_testing()
+    caches_mod._reset_for_testing()
 
 
 @pytest.fixture

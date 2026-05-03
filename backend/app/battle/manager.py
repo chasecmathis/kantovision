@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from app.battle.matchmaking import QueueEntry
-from app.battle.state import BattleState, PlayerState, PokemonBattleState
+from app.battle.state import BattleState, BattleStatus, PlayerState, PokemonBattleState
 
 _battles: dict[str, BattleState] = {}
 _user_battle: dict[str, str] = {}  # user_id → battle_id
@@ -59,7 +59,7 @@ def submit_move(battle_id: str, user_id: str, move_slot: int) -> bool:
     Returns True when both players have submitted and the turn is ready to resolve.
     """
     state = _battles.get(battle_id)
-    if not state or state.status != "active":
+    if not state or state.status != BattleStatus.ACTIVE:
         return False
     state.pending_moves[user_id] = move_slot
     return len(state.pending_moves) == 2

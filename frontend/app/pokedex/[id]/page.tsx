@@ -108,9 +108,11 @@ function DetailContent() {
   const gradient = getTypeGradient(types);
   // Use the sprite stored in the backend (form-aware) rather than constructing by ID
   const artwork = getOfficialArtwork(pokemon.sprites);
-  const flavorText = pokemon.flavor_text ?? "";
-  const genus = pokemon.genus ?? "";
-  const evolutions = pokemon.evolution_chain;
+  // Species-level fields (flavor text, genus, evolution chain) are only stored on
+  // the base pokemon entry — fall back to basePokemon when viewing a form variant.
+  const flavorText = pokemon.flavor_text ?? basePokemon?.flavor_text ?? "";
+  const genus = pokemon.genus ?? basePokemon?.genus ?? "";
+  const evolutions = pokemon.evolution_chain?.length ? pokemon.evolution_chain : (basePokemon?.evolution_chain ?? []);
 
   const totalStats = pokemon.stats.reduce((s, st) => s + st.base_stat, 0);
 
@@ -229,7 +231,7 @@ function DetailContent() {
               className="text-4xl font-black text-text-primary leading-none"
               style={{ fontFamily: "var(--font-unbounded)" }}
             >
-              {formatPokemonName(basePokemon?.name ?? pokemon.name).toUpperCase()}
+              {formatPokemonName(pokemon.name).toUpperCase()}
             </h1>
             {genus && (
               <p className="text-text-secondary text-sm mt-1">{genus}</p>

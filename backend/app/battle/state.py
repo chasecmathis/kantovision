@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas import BaseStats, EVSpread, IVSpread
 
 
-@dataclass
-class MoveSlot:
+class BattleStatus(StrEnum):
+    ACTIVE = "active"
+    ENDED = "ended"
+
+
+class MoveSlot(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
     power: int
     accuracy: int
@@ -15,8 +23,7 @@ class MoveSlot:
     category: str  # "physical" | "special" | "status"
 
 
-@dataclass
-class PokemonBattleState:
+class PokemonBattleState(BaseModel):
     species_id: int
     name: str
     current_hp: int
@@ -31,8 +38,7 @@ class PokemonBattleState:
     fainted: bool = False
 
 
-@dataclass
-class PlayerState:
+class PlayerState(BaseModel):
     user_id: str
     team: list[PokemonBattleState]
     active_index: int = 0
@@ -42,16 +48,15 @@ class PlayerState:
         return self.team[self.active_index]
 
 
-@dataclass
-class BattleState:
+class BattleState(BaseModel):
     id: str
     player1: PlayerState
     player2: PlayerState
     turn: int = 1
-    status: str = "active"  # "active" | "ended"
-    pending_moves: dict[str, int] = field(default_factory=dict)
+    status: BattleStatus = BattleStatus.ACTIVE
+    pending_moves: dict[str, int] = Field(default_factory=dict)
     winner_id: str | None = None
-    log: list[str] = field(default_factory=list)
+    log: list[str] = Field(default_factory=list)
 
 
 # ─── DB-stored team slot format (matches frontend serialization) ───────────────
@@ -63,10 +68,10 @@ class StoredSlot(BaseModel):
     pokemon_id: int
     species_name: str = ""
     types: list[str] = []
-    base_stats: dict[str, int] = {}
+    base_stats: BaseStats = Field(default_factory=BaseStats)
     ability: str = ""
     nature: str | None = None
     item: str | None = None
     move_names: list[str | None] = []
-    evs: dict[str, int] = {}
-    ivs: dict[str, int] = {}
+    evs: EVSpread = Field(default_factory=EVSpread)
+    ivs: IVSpread = Field(default_factory=IVSpread)

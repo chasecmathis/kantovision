@@ -28,6 +28,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%H:%M:%S",
 )
+# Silence noisy HTTP / DB client loggers (they log every request at INFO/DEBUG)
+for _lib in ("httpx", "httpcore", "hpack", "supabase", "postgrest", "gotrue", "realtime"):
+    logging.getLogger(_lib).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 POKEAPI = "https://pokeapi.co/api/v2"
@@ -86,6 +89,7 @@ _FORM_DISPLAY: dict[str, str] = {
     "sensu": "Sensu Style",
     "red-striped": "Red-Striped",
     "blue-striped": "Blue-Striped",
+    "white-striped": "White-Striped",
     "ice": "Ice Rider",
     "shadow": "Shadow Rider",
     "crowned": "Crowned",
@@ -96,6 +100,7 @@ _FORM_DISPLAY: dict[str, str] = {
     "10": "10%",
     "50": "50%",
     "complete": "Complete",
+    "midday": "Midday",
     "midnight": "Midnight",
     "dusk": "Dusk",
     "dusk-mane": "Dusk Mane",
@@ -111,6 +116,29 @@ _FORM_DISPLAY: dict[str, str] = {
     "paldea-combat": "Combat Breed",
     "paldea-blaze": "Blaze Breed",
     "paldea-aqua": "Aqua Breed",
+    # Default-form suffixes (species where the default variety has a named form)
+    "normal": "Normal",
+    "plant": "Plant Cloak",
+    "altered": "Altered Forme",
+    "land": "Land Forme",
+    "standard": "Standard Mode",
+    "incarnate": "Incarnate Forme",
+    "ordinary": "Ordinary",
+    "aria": "Aria Forme",
+    "shield": "Shield Forme",
+    "blade": "Blade Forme",
+    "average": "Average Size",
+    "solo": "Solo Form",
+    "disguised": "Disguised",
+    "full-belly": "Full Belly",
+    "single-strike": "Single Strike",
+    "rapid-strike": "Rapid Strike",
+    "male": "Male",
+    "female": "Female",
+    "red-meteor": "Meteor Form",
+    "sandy": "Sandy Cloak",
+    "trash": "Trash Cloak",
+    "therian": "Therian Forme",
 }
 
 
@@ -133,7 +161,9 @@ def _format_form_display_name(form_suffix: str) -> str:
     if label:
         return label
     # Fallback: title-case hyphen-separated words
-    return " ".join(w.capitalize() for w in form_suffix.split("-"))
+    fallback = " ".join(w.capitalize() for w in form_suffix.split("-"))
+    logger.debug("No display mapping for form suffix %r — using fallback %r", form_suffix, fallback)
+    return fallback
 
 
 def _clean_text(text: str | None) -> str | None:
@@ -403,6 +433,9 @@ async def ingest_pokemon(client: httpx.AsyncClient, sem: asyncio.Semaphore, db: 
             ],
             # Raw varieties list from species endpoint — used by ingest_pokemon_varieties()
             "varieties": species.get("varieties", []),
+            # Species name (bare, e.g. "basculin") — pokemon name can differ
+            # (e.g. "basculin-red-striped") so we need both for suffix extraction.
+            "species_name": species.get("name", poke["name"]),
         }
 
     results = await _gather_raw(process, items)
@@ -475,7 +508,9 @@ async def ingest_pokemon_varieties(
         varieties = r.get("varieties", [])
         if len(varieties) <= 1:
             continue  # single-variety species — nothing to do
-        species_name = r["pokemon_row"]["name"]
+        # Use the species name (bare, e.g. "basculin") not the pokemon name
+        # (e.g. "basculin-red-striped") for correct suffix extraction.
+        species_name = r.get("species_name", r["pokemon_row"]["name"])
 
         # Guard against the same base species appearing twice (shouldn't happen,
         # but harmless to be safe)
@@ -483,7 +518,15 @@ async def ingest_pokemon_varieties(
             continue
         seen_species_ids.add(species_id)
 
-        multi_form_species.append({"species_id": species_id, "species_name": species_name})
+        # Find the default variety's pokemon name for display-name derivation
+        default_var = next((v for v in varieties if v.get("is_default", False)), None)
+        default_pokemon_name = default_var["pokemon"]["name"] if default_var else species_name
+
+        multi_form_species.append({
+            "species_id": species_id,
+            "species_name": species_name,
+            "default_pokemon_name": default_pokemon_name,
+        })
         for v in varieties:
             form_name: str = v["pokemon"]["name"]
             if not v.get("is_default", False) and form_name not in seen_form_names:
@@ -619,13 +662,19 @@ async def ingest_pokemon_varieties(
     # upserting is safe (ON CONFLICT DO UPDATE is idempotent for existing rows).
     variety_rows: list[dict] = []
     for s in multi_form_species:
+        # Derive a proper display name for the default form.
+        # E.g. species "basculin" with default pokemon "basculin-red-striped"
+        # → suffix "red-striped" → display "Red-Striped".
+        # For species where the default name matches (e.g. "charizard") → "Default".
+        default_suffix = _extract_form_suffix(s["default_pokemon_name"], s["species_name"])
+        default_display = _format_form_display_name(default_suffix)
         variety_rows.append(
             {
                 "species_id": s["species_id"],
                 "form_pokemon_id": s["species_id"],  # default form points to itself
-                "form_name": s["species_name"],
-                "form_suffix": "",
-                "display_name": "Default",
+                "form_name": s["default_pokemon_name"],
+                "form_suffix": "",  # keep empty — frontend uses is_default for routing
+                "display_name": default_display,
                 "is_default": True,
             }
         )

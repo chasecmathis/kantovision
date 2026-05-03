@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import copy
 import random
-from dataclasses import dataclass
 
-from app.battle.state import BattleState, MoveSlot, PlayerState, PokemonBattleState
+from pydantic import BaseModel, ConfigDict
+
+from app.battle.state import BattleState, BattleStatus, MoveSlot, PlayerState, PokemonBattleState
 
 # ─── Type effectiveness chart: TYPE_CHART[attacking][defending] = multiplier ──
 # Missing entries default to 1.0 (neutral).
@@ -176,8 +177,9 @@ def calc_damage(
     return max(1, damage)
 
 
-@dataclass
-class TurnResult:
+class TurnResult(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     new_state: BattleState
     log_entries: list[str]
     battle_over: bool
@@ -255,7 +257,7 @@ def resolve_turn(state: BattleState, move_p1: int, move_p2: int) -> TurnResult:
             winner_id = p1.user_id
         elif p2_alive:
             winner_id = p2.user_id
-        new_state.status = "ended"
+        new_state.status = BattleStatus.ENDED
         new_state.winner_id = winner_id
 
     new_state.turn += 1

@@ -4,7 +4,7 @@ import time
 import uuid
 from dataclasses import dataclass
 
-TICKET_TTL = 30.0  # seconds
+from app.config import get_settings
 
 
 @dataclass
@@ -18,14 +18,10 @@ _tickets: dict[str, _Ticket] = {}
 
 def issue_ticket(user_id: str) -> str:
     """Create a short-lived, single-use ticket and return its ID."""
+    ttl = get_settings().ticket_ttl_seconds
     ticket_id = str(uuid.uuid4())
-    _tickets[ticket_id] = _Ticket(user_id=user_id, expires_at=time.monotonic() + TICKET_TTL)
+    _tickets[ticket_id] = _Ticket(user_id=user_id, expires_at=time.monotonic() + ttl)
     return ticket_id
-
-
-def _reset_for_testing() -> None:
-    """Clear all ticket state. Call this in test teardown fixtures."""
-    _tickets.clear()
 
 
 def consume_ticket(ticket_id: str) -> str | None:
@@ -37,3 +33,17 @@ def consume_ticket(ticket_id: str) -> str | None:
     if ticket is None or time.monotonic() > ticket.expires_at:
         return None
     return ticket.user_id
+
+
+def sweep_expired() -> int:
+    """Remove all expired tickets. Returns the count of entries removed."""
+    now = time.monotonic()
+    expired = [tid for tid, t in _tickets.items() if now > t.expires_at]
+    for tid in expired:
+        del _tickets[tid]
+    return len(expired)
+
+
+def _reset_for_testing() -> None:
+    """Clear all ticket state. Call this in test teardown fixtures."""
+    _tickets.clear()

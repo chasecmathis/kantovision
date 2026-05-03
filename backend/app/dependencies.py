@@ -14,7 +14,7 @@ def get_current_user_id(
     user_response = get_db().auth.get_user(credentials.credentials)
     if not user_response.user:
         raise HTTPException(status_code=401, detail="Invalid user")
-    return user_response.user
+    return user_response.user.id
 
 
 UserIdDep = Annotated[str, Depends(get_current_user_id)]

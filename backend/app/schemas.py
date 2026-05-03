@@ -38,7 +38,7 @@ class SerializedSlot(BaseModel):
     nature: str | None = None
     item_name: str | None = None
     move_names: list[str | None]
-    base_stats: BaseStats = Field(default_factory=EVSpread)
+    base_stats: BaseStats = Field(default_factory=BaseStats)
     evs: EVSpread
     ivs: IVSpread = Field(default_factory=IVSpread)
 

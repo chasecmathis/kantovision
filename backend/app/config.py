@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # WebSocket rate limiting — max messages per second per connection
     ws_rate_limit_per_second: int = 10
 
+    # TTLs for in-memory caches
+    ticket_ttl_seconds: float = 30.0
+    recent_battle_end_ttl_seconds: int = 300
+
+    # How often the background task sweeps expired cache entries (seconds)
+    cleanup_interval_seconds: int = 60
+
 
 @lru_cache
 def get_settings() -> Settings:

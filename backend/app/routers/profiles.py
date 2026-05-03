@@ -10,7 +10,7 @@ router = APIRouter(prefix="/profiles", tags=["profiles"])
 @router.get("/me")
 def get_my_profile(user: UserIdDep) -> ProfileRow:
     db = get_db()
-    result = db.table("profiles").select("*").eq("id", user.id).execute()
+    result = db.table("profiles").select("*").eq("id", user).execute()
     if not result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
     return result.data[0]
@@ -19,7 +19,7 @@ def get_my_profile(user: UserIdDep) -> ProfileRow:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_profile(body: CreateProfileRequest, user: UserIdDep) -> ProfileRow:
     db = get_db()
-    existing = db.table("profiles").select("id").eq("id", user.id).execute()
+    existing = db.table("profiles").select("id").eq("id", user).execute()
     if existing.data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Profile already exists"
@@ -29,7 +29,7 @@ def create_profile(body: CreateProfileRequest, user: UserIdDep) -> ProfileRow:
             db.table("profiles")
             .insert(
                 {
-                    "id": user.id,
+                    "id": user,
                     "username": body.username,
                     "display_name": body.display_name,
                 }
@@ -51,7 +51,7 @@ def create_profile(body: CreateProfileRequest, user: UserIdDep) -> ProfileRow:
 def update_profile(body: UpdateProfileRequest, user: UserIdDep) -> ProfileRow:
     db = get_db()
     result = (
-        db.table("profiles").update({"display_name": body.display_name}).eq("id", user.id).execute()
+        db.table("profiles").update({"display_name": body.display_name}).eq("id", user).execute()
     )
     if not result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
@@ -67,7 +67,7 @@ def search_profiles(user: UserIdDep, username: str = "") -> list[ProfileRow]:
         db.table("profiles")
         .select("*")
         .ilike("username", f"%{username}%")
-        .neq("id", user.id)
+        .neq("id", user)
         .limit(10)
         .execute()
     )

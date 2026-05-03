@@ -34,8 +34,9 @@ def metrics() -> dict:
     # Import here to avoid circular imports at module load time
     from app.battle.manager import _battles
     from app.battle.matchmaking import _queue
-    from app.sockets.battle import _move_cache, _move_timeouts, _pending_forfeits
+    from app.sockets.caches import _recent_battle_ends
     from app.sockets.connections import manager
+    from app.sockets.timers import _move_timeouts, _pending_forfeits
 
     return {
         "active_battles": len(_battles),
@@ -43,5 +44,5 @@ def metrics() -> dict:
         "active_connections": len(manager._sockets),
         "pending_reconnects": len(_pending_forfeits),
         "pending_move_timeouts": len(_move_timeouts),
-        "move_cache_size": len(_move_cache),
+        "recent_battle_ends": len(_recent_battle_ends),
     }

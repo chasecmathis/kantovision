@@ -80,7 +80,7 @@ class TestBuildPokemon:
         return asyncio.run(coro)
 
     def test_loads_moves_from_db(self):
-        from app.sockets import battle as battle_socket
+        from app.battle import db as battle_db
 
         slot = _stored_slot(move_names=["tackle", "razor-leaf"])
         move_rows = _move_rows(
@@ -88,45 +88,45 @@ class TestBuildPokemon:
             ("razor-leaf", "grass", "physical", 55),
         )
         with (
-            patch("app.sockets.battle.get_db", return_value=MagicMock()),
-            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+            patch("app.battle.db.get_db", return_value=MagicMock()),
+            patch("app.battle.db.move_repo.get_moves_bulk", return_value=move_rows),
         ):
-            mon = self._run(battle_socket._build_pokemon(slot))
+            mon = self._run(battle_db.build_pokemon(slot))
 
         assert len(mon.moves) == 2
         move_names = {m.name for m in mon.moves}
         assert move_names == {"tackle", "razor-leaf"}
 
     def test_falls_back_to_struggle_when_no_moves(self):
-        from app.sockets import battle as battle_socket
+        from app.battle import db as battle_db
 
         slot = _stored_slot(move_names=[None, None, None, None])
         with (
-            patch("app.sockets.battle.get_db", return_value=MagicMock()),
-            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value={}),
+            patch("app.battle.db.get_db", return_value=MagicMock()),
+            patch("app.battle.db.move_repo.get_moves_bulk", return_value={}),
         ):
-            mon = self._run(battle_socket._build_pokemon(slot))
+            mon = self._run(battle_db.build_pokemon(slot))
 
         assert len(mon.moves) == 1
         assert mon.moves[0].name == "struggle"
 
     def test_skips_moves_missing_from_db(self):
-        from app.sockets import battle as battle_socket
+        from app.battle import db as battle_db
 
         slot = _stored_slot(move_names=["tackle", "unknown-move"])
         move_rows = _move_rows(("tackle", "normal", "physical", 40))
         with (
-            patch("app.sockets.battle.get_db", return_value=MagicMock()),
-            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+            patch("app.battle.db.get_db", return_value=MagicMock()),
+            patch("app.battle.db.move_repo.get_moves_bulk", return_value=move_rows),
         ):
-            mon = self._run(battle_socket._build_pokemon(slot))
+            mon = self._run(battle_db.build_pokemon(slot))
 
         assert len(mon.moves) == 1
         assert mon.moves[0].name == "tackle"
 
     def test_calculates_stats_using_underscore_keys(self):
         """Regression: base_stats uses underscore keys (special_attack), not hyphen."""
-        from app.sockets import battle as battle_socket
+        from app.battle import db as battle_db
 
         slot = _stored_slot(
             base_stats={
@@ -140,10 +140,10 @@ class TestBuildPokemon:
         )
         move_rows = _move_rows(("tackle", "normal", "physical", 40))
         with (
-            patch("app.sockets.battle.get_db", return_value=MagicMock()),
-            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+            patch("app.battle.db.get_db", return_value=MagicMock()),
+            patch("app.battle.db.move_repo.get_moves_bulk", return_value=move_rows),
         ):
-            mon = self._run(battle_socket._build_pokemon(slot))
+            mon = self._run(battle_db.build_pokemon(slot))
 
         # special_attack should NOT be 45 (the old default from the bug where hyphen keys were used)
         assert mon.special_attack != 45
@@ -151,20 +151,20 @@ class TestBuildPokemon:
         assert mon.special_attack == 150
 
     def test_does_not_call_pokeapi(self):
-        """Confirm no HTTP requests are made during _build_pokemon."""
+        """Confirm no HTTP requests are made during build_pokemon."""
         import httpx
 
-        from app.sockets import battle as battle_socket
+        from app.battle import db as battle_db
 
         slot = _stored_slot()
         move_rows = _move_rows(("tackle", "normal", "physical", 40))
         with (
-            patch("app.sockets.battle.get_db", return_value=MagicMock()),
-            patch("app.sockets.battle.move_repo.get_moves_bulk", return_value=move_rows),
+            patch("app.battle.db.get_db", return_value=MagicMock()),
+            patch("app.battle.db.move_repo.get_moves_bulk", return_value=move_rows),
             patch.object(httpx.AsyncClient, "get", side_effect=AssertionError("HTTP call made!")),
         ):
             # Should not raise since httpx is not used anymore
-            self._run(battle_socket._build_pokemon(slot))
+            self._run(battle_db.build_pokemon(slot))
 
 
 # ─── resolve_turn integration ─────────────────────────────────────────────────
