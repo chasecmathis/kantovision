@@ -133,3 +133,12 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE + old Edge */
+  scrollbar-width: none;     /* Firefox */
+}

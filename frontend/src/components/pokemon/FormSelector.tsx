@@ -20,7 +20,7 @@ export function FormSelector({ varieties, activeFormSuffix, onSelect }: FormSele
 
   return (
     <div className="relative">
-      <div className="flex gap-1.5 overflow-x-auto scrollbar-none px-1 pb-0.5">
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar px-1 pb-0.5">
         {varieties.map((v) => {
           const isActive = activeFormSuffix === v.formSuffix || (activeFormSuffix === null && v.isDefault);
           return (
