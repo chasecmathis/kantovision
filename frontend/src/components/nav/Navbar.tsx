@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/src/lib/utils";
@@ -47,12 +48,14 @@ export function Navbar() {
       <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-6">
         {/* Logo */}
         <Link href="/pokedex" className="flex items-center gap-2 group">
-          <div className="relative">
-            <div className="w-7 h-7 rounded-full border-2 border-accent flex items-center justify-center group-hover:border-accent/80 transition-colors">
-              <div className="w-3 h-3 rounded-full bg-accent group-hover:bg-accent/80 transition-colors" />
-            </div>
-            <div className="absolute -top-0.5 left-3 right-0 h-px bg-accent/40" />
-          </div>
+          <Image
+            src="/abra.png"
+            alt="KantoVision logo"
+            width={24}
+            height={24}
+            className="group-hover:opacity-80 transition-opacity"
+            unoptimized
+          />
           <span
             className="text-sm font-display font-bold tracking-widest text-text-primary"
             style={{ fontFamily: "var(--font-unbounded)" }}
