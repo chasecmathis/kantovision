@@ -48,7 +48,27 @@ function ResultCard({ name, confidence }: { name: string; confidence: number }) 
   const pokemonQuery = usePokemon(name);
   const pokemon = pokemonQuery.data;
 
-  if (!pokemon) return null;
+  if (!pokemon) {
+    return (
+      <div className="animate-fade-up">
+        <div className="rounded-2xl border border-bg-border overflow-hidden bg-bg-surface p-6">
+          <div className="flex gap-6">
+            <div className="w-32 h-32 rounded-xl shimmer" />
+            <div className="flex-1 space-y-3">
+              <div className="h-4 w-16 rounded shimmer" />
+              <div className="h-6 w-40 rounded shimmer" />
+              <div className="h-5 w-24 rounded shimmer" />
+            </div>
+          </div>
+          <div className="mt-5 space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-3 rounded shimmer" style={{ opacity: 1 - i * 0.1 }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const types = pokemon.types.map((t) => t.type.name);
   const gradient = getTypeGradient(types);

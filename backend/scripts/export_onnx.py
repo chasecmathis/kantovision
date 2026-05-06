@@ -40,7 +40,7 @@ def main() -> None:
         input_names=["pixel_values"],
         output_names=["logits"],
         dynamic_axes={"pixel_values": {0: "batch"}, "logits": {0: "batch"}},
-        opset_version=14,
+        opset_version=17,
     )
 
     # Save config: labels + preprocessing params
