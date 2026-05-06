@@ -172,6 +172,41 @@ def _parse_detail(d: dict) -> PokemonDetail:
     )
 
 
+def get_pokemon_by_name(db: Client, name: str) -> PokemonDetail | None:
+    result = (
+        db.table("pokemon")
+        .select(_POKEMON_DETAIL_SELECT)
+        .eq("name", name.lower())
+        .maybe_single()
+        .execute()
+    )
+    if not result.data:
+        return None
+    pokemon_id = result.data["id"]
+
+    varieties_result = (
+        db.table("pokemon_varieties")
+        .select(_POKEMON_VARIETIES_SELECT)
+        .eq("species_id", pokemon_id)
+        .order("is_default", desc=True)
+        .execute()
+    )
+    varieties = [
+        VarietyRow(
+            form_pokemon_id=v["form_pokemon_id"],
+            form_name=v["form_name"],
+            form_suffix=v["form_suffix"],
+            display_name=v["display_name"],
+            is_default=v["is_default"],
+        )
+        for v in (varieties_result.data or [])
+    ]
+
+    detail = _parse_detail(result.data)
+    detail.varieties = varieties
+    return detail
+
+
 def get_pokemon(db: Client, pokemon_id: int) -> PokemonDetail | None:
     result = (
         db.table("pokemon")

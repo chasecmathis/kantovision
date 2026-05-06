@@ -167,9 +167,12 @@ def list_pokemon(
 
 
 @router.get("/pokemon/{pokemon_id}", response_model=PokemonDetailOut)
-def get_pokemon(pokemon_id: int) -> PokemonDetailOut:
+def get_pokemon(pokemon_id: str) -> PokemonDetailOut:
     db = get_db()
-    detail = pokemon_repo.get_pokemon(db, pokemon_id)
+    if pokemon_id.isdigit():
+        detail = pokemon_repo.get_pokemon(db, int(pokemon_id))
+    else:
+        detail = pokemon_repo.get_pokemon_by_name(db, pokemon_id)
     if not detail:
         raise HTTPException(status_code=404, detail=f"Pokémon {pokemon_id} not found")
     return _detail_to_out(detail)

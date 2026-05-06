@@ -12,32 +12,37 @@ import {
 } from "@/src/lib/pokeapi";
 import { getTypeGradient } from "@/src/lib/typeColors";
 import { padId } from "@/src/lib/utils";
+import { supabase } from "@/src/lib/supabase";
 
-// Mock classifier — in production, replace with actual TF.js model inference
-const MOCK_PREDICTIONS = [
-  { name: "charizard", confidence: 0.91 },
-  { name: "pikachu", confidence: 0.94 },
-  { name: "mewtwo", confidence: 0.88 },
-  { name: "gengar", confidence: 0.85 },
-  { name: "snorlax", confidence: 0.79 },
-  { name: "eevee", confidence: 0.96 },
-  { name: "bulbasaur", confidence: 0.82 },
-  { name: "squirtle", confidence: 0.87 },
-];
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function mockClassify(file: File): Promise<{ name: string; confidence: number }[]> {
-  // Simulate inference delay
-  await new Promise((r) => setTimeout(r, 1800));
-  const top = MOCK_PREDICTIONS[Math.floor(Math.random() * MOCK_PREDICTIONS.length)];
-  // Generate fake top-5 candidates
-  const others = MOCK_PREDICTIONS
-    .filter((p) => p.name !== top.name)
-    .slice(0, 4)
-    .map((p) => ({ ...p, confidence: p.confidence * (0.3 + Math.random() * 0.4) }));
-  return [top, ...others].sort((a, b) => b.confidence - a.confidence);
+async function classifyImage(
+  file: File
+): Promise<{ name: string; confidence: number }[]> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Please log in to use the AI Scanner");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_URL}/scan/classify`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `Classification failed (${res.status})`);
+  }
+
+  const json: { predictions: { name: string; confidence: number }[] } =
+    await res.json();
+  return json.predictions;
 }
 
-type ScanState = "idle" | "scanning" | "done";
+type ScanState = "idle" | "scanning" | "done" | "error";
 
 function ResultCard({ name, confidence }: { name: string; confidence: number }) {
   const pokemonQuery = usePokemon(name);
@@ -162,6 +167,7 @@ export default function ScanPage() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<{ name: string; confidence: number }[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(async (file: File) => {
@@ -170,13 +176,15 @@ export default function ScanPage() {
     setImageUrl(url);
     setState("scanning");
     setPredictions([]);
+    setErrorMsg(null);
 
     try {
-      const results = await mockClassify(file);
+      const results = await classifyImage(file);
       setPredictions(results);
       setState("done");
-    } catch {
-      setState("idle");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Classification failed");
+      setState("error");
     }
   }, []);
 
@@ -263,7 +271,7 @@ export default function ScanPage() {
 
               <div className="p-4 flex items-center justify-between border-t border-bg-border">
                 <span className="text-xs text-text-muted" style={{ fontFamily: "var(--font-jetbrains)" }}>
-                  {state === "scanning" ? "PROCESSING..." : state === "done" ? "CLASSIFICATION COMPLETE" : ""}
+                  {state === "scanning" ? "PROCESSING..." : state === "done" ? "CLASSIFICATION COMPLETE" : state === "error" ? "ERROR" : ""}
                 </span>
                 <button
                   onClick={reset}
@@ -309,7 +317,7 @@ export default function ScanPage() {
 
               <div className="flex items-center gap-3 text-text-muted text-xs">
                 <Scan size={12} />
-                <span style={{ fontFamily: "var(--font-jetbrains)" }}>Powered by TF.js ViT model</span>
+                <span style={{ fontFamily: "var(--font-jetbrains)" }}>Powered by ViT classifier</span>
                 <Zap size={12} />
               </div>
             </button>
@@ -329,7 +337,7 @@ export default function ScanPage() {
                 ["Training", "imjeffhi/pokemon_classifier"],
                 ["Classes", "898 Pokémon species"],
                 ["Input", "224×224 px · ImageNet norm"],
-                ["Status", "Demo mode (mock inference)"],
+                ["Status", "Live inference"],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between text-xs">
                   <span className="text-text-muted">{k}</span>
@@ -357,6 +365,26 @@ export default function ScanPage() {
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="h-24 rounded-xl shimmer" style={{ opacity: 1 - i * 0.25 }} />
               ))}
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="h-full min-h-64 flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-red-500/30 text-text-muted">
+              <div className="w-12 h-12 rounded-full border-2 border-red-500/30 flex items-center justify-center">
+                <Zap size={20} className="text-red-400" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-red-400">Classification failed</p>
+                <p className="text-xs mt-1 text-text-muted max-w-xs">{errorMsg}</p>
+              </div>
+              <button
+                onClick={reset}
+                className="flex items-center gap-2 text-xs text-accent hover:text-accent/80 border border-accent/30 hover:border-accent/50 px-4 py-2 rounded-lg transition-all"
+                style={{ fontFamily: "var(--font-unbounded)" }}
+              >
+                <RotateCcw size={12} />
+                TRY AGAIN
+              </button>
             </div>
           )}
 

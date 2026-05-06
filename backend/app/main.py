@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.logging_config import setup_logging
-from app.routers import battles, health, pokedex, profiles, teams
+from app.routers import battles, health, pokedex, profiles, scan, teams
 from app.sockets import battle as battle_ws
 from app.sockets.connections import manager as ws_manager
 from app.sockets.message_types import MSG_SERVER_SHUTDOWN
@@ -72,6 +72,7 @@ def create_app() -> FastAPI:
     application.include_router(profiles.router)
     application.include_router(battles.router)
     application.include_router(battle_ws.router)
+    application.include_router(scan.router)
 
     return application
 

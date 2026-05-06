@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # How often the background task sweeps expired cache entries (seconds)
     cleanup_interval_seconds: int = 60
 
+    # AI classifier
+    classifier_model_dir: str = "models"
+    classifier_enabled: bool = True
+    max_upload_size_mb: int = 10
+
 
 @lru_cache
 def get_settings() -> Settings:

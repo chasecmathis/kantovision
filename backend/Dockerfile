@@ -1,28 +1,43 @@
-# ─── Stage 1: install dependencies ───────────────────────────────────────────
-FROM python:3.12-slim AS deps
+# ─── Stage 1: export model to ONNX ────────────────────────────────────────────
+FROM python:3.12-slim AS export
 
-# uv for fast, reproducible installs
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
+COPY pyproject.toml uv.lock ./
+COPY scripts/ ./scripts/
 
-# Copy dependency manifests first — Docker caches this layer until they change
+# Install export deps (torch + transformers) — only used in this stage
+RUN uv sync --frozen --no-dev --group export --no-install-project \
+    --extra-index-url https://download.pytorch.org/whl/cpu
+
+# Run the export script to produce models/*.onnx + models/config.json
+RUN /app/.venv/bin/python scripts/export_onnx.py
+
+# ─── Stage 2: install runtime dependencies ────────────────────────────────────
+FROM python:3.12-slim AS deps
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
-# Install production deps only into an isolated .venv
+# Install production deps only (onnxruntime, fastapi, etc. — no torch)
 RUN uv sync --frozen --no-dev --no-install-project
 
-# ─── Stage 2: runtime image ───────────────────────────────────────────────────
+# ─── Stage 3: runtime image ───────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
 
-# Non-root user — running as root in containers is a security risk
 RUN groupadd -g 1001 appgroup && \
     useradd -u 1001 -g appgroup -m appuser
 
 WORKDIR /app
 
-# Pull the virtualenv from the build stage (no uv needed at runtime)
+# Pull the lightweight virtualenv (no torch)
 COPY --from=deps /app/.venv /app/.venv
+
+# Pull the exported ONNX model from the export stage
+COPY --from=export /app/models ./models/
 
 # Copy application source
 COPY app/ ./app/
@@ -34,20 +49,15 @@ RUN chown -R appuser:appgroup /app && \
 USER appuser
 
 ENV PATH="/app/.venv/bin:$PATH"
-# Prevent .pyc files and ensure logs stream immediately
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-# Healthcheck — uses stdlib urllib so no extra deps required.
-# Reads $PORT so it matches the port uvicorn is actually bound to.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD python -c \
     "import urllib.request, os; \
      urllib.request.urlopen('http://localhost:{}/health'.format(os.environ.get('PORT', '8000')))" \
   || exit 1
 
-# entrypoint.sh runs `exec uvicorn ...` so uvicorn is PID 1 and receives SIGTERM
-# directly — this triggers our graceful shutdown lifespan.
 CMD ["/app/entrypoint.sh"]
