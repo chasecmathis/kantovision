@@ -143,7 +143,7 @@ class TestToMoveSlot:
         assert slot.type == "fire"
         assert slot.category == "special"
 
-    def test_defaults_none_power_to_50(self):
+    def test_none_power_stays_none(self):
         row = MoveRow(
             id=2,
             name="growl",
@@ -155,9 +155,9 @@ class TestToMoveSlot:
             flavor_text=None,
         )
         slot = to_move_slot(row)
-        assert slot.power == 50
+        assert slot.power is None
 
-    def test_defaults_none_accuracy_to_100(self):
+    def test_none_accuracy_stays_none(self):
         row = MoveRow(
             id=3,
             name="swift",
@@ -169,4 +169,4 @@ class TestToMoveSlot:
             flavor_text=None,
         )
         slot = to_move_slot(row)
-        assert slot.accuracy == 100
+        assert slot.accuracy is None

@@ -19,11 +19,13 @@ class MoveRow(BaseModel):
 
 def to_move_slot(row: MoveRow) -> MoveSlot:
     """Convert a MoveRow to a MoveSlot for use in the battle engine."""
+    pp = row.pp
     return MoveSlot(
         name=row.name,
-        power=row.power or 50,
-        accuracy=row.accuracy or 100,
-        pp=row.pp,
+        power=row.power,
+        accuracy=row.accuracy,
+        max_pp=pp,
+        current_pp=pp,
         type=row.type,
         category=row.damage_class,
     )

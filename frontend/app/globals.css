@@ -142,3 +142,40 @@ body {
   -ms-overflow-style: none;  /* IE + old Edge */
   scrollbar-width: none;     /* Firefox */
 }
+
+/* ─── Battle Animations ─────────────────────────────────────────────── */
+
+@keyframes idleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes turnPulse {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Battle move/switch card interaction states */
+.move-card {
+  transition: filter 0.15s ease, transform 0.1s ease,
+              border-color 0.15s ease, background-color 0.15s ease;
+}
+.move-card:hover:not(:disabled) {
+  filter: brightness(1.25);
+  transform: translateY(-1px);
+}
+.move-card:active:not(:disabled) {
+  transform: scale(0.97);
+  filter: brightness(1.4);
+}
+
+.switch-card {
+  transition: filter 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+}
+.switch-card:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+.switch-card:active:not(:disabled) {
+  transform: scale(0.98);
+}

@@ -1,7 +1,15 @@
 """Shared test object factories."""
 
+from app.battle.enums import StatusCondition, Terrain, Weather
 from app.battle.matchmaking import QueueEntry
-from app.battle.state import BattleState, MoveSlot, PlayerState, PokemonBattleState
+from app.battle.state import (
+    BattleState,
+    FieldState,
+    MoveSlot,
+    PlayerState,
+    PokemonBattleState,
+    StatStages,
+)
 
 
 def make_move(
@@ -11,8 +19,24 @@ def make_move(
     pp: int = 35,
     type_: str = "normal",
     category: str = "physical",
+    priority: int = 0,
+    effect_id: str = "",
+    effect_chance: int = 0,
+    flags: list[str] | None = None,
 ) -> MoveSlot:
-    return MoveSlot(name=name, power=power, accuracy=accuracy, pp=pp, type=type_, category=category)
+    return MoveSlot(
+        name=name,
+        power=power,
+        accuracy=accuracy,
+        max_pp=pp,
+        current_pp=pp,
+        type=type_,
+        category=category,
+        priority=priority,
+        effect_id=effect_id,
+        effect_chance=effect_chance,
+        flags=flags or [],
+    )
 
 
 def make_pokemon(
@@ -27,6 +51,11 @@ def make_pokemon(
     types: list[str] | None = None,
     moves: list[MoveSlot] | None = None,
     fainted: bool = False,
+    ability: str = "",
+    item: str = "",
+    nature: str = "",
+    status: StatusCondition = StatusCondition.NONE,
+    stat_stages: StatStages | None = None,
 ) -> PokemonBattleState:
     return PokemonBattleState(
         species_id=species_id,
@@ -41,6 +70,11 @@ def make_pokemon(
         types=types if types is not None else ["normal"],
         moves=moves if moves is not None else [make_move()],
         fainted=fainted,
+        ability=ability,
+        item=item,
+        nature=nature,
+        status=status,
+        stat_stages=stat_stages or StatStages(),
     )
 
 
@@ -53,9 +87,19 @@ def make_battle_state(
     user2: str = "user-2",
     team1: list[PokemonBattleState] | None = None,
     team2: list[PokemonBattleState] | None = None,
+    weather: Weather = Weather.NONE,
+    weather_turns: int = 0,
+    terrain: Terrain = Terrain.NONE,
+    terrain_turns: int = 0,
 ) -> BattleState:
     return BattleState(
         id="battle-test-id",
         player1=PlayerState(user_id=user1, team=team1 or [make_pokemon(name="Mon1")]),
         player2=PlayerState(user_id=user2, team=team2 or [make_pokemon(name="Mon2")]),
+        field=FieldState(
+            weather=weather,
+            weather_turns=weather_turns,
+            terrain=terrain,
+            terrain_turns=terrain_turns,
+        ),
     )

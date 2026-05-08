@@ -17,6 +17,7 @@ async def build_pokemon(slot: StoredSlot) -> PokemonBattleState:
     b = slot.base_stats
     iv = slot.ivs
     ev = slot.evs
+    nature = (slot.nature or "").lower()
 
     move_names = [n for n in slot.move_names if n]
     if move_names:
@@ -28,7 +29,13 @@ async def build_pokemon(slot: StoredSlot) -> PokemonBattleState:
     if not moves:
         moves = [
             MoveSlot(
-                name="struggle", power=50, accuracy=100, pp=1, type="normal", category="physical"
+                name="struggle",
+                power=50,
+                accuracy=100,
+                max_pp=1,
+                current_pp=1,
+                type="normal",
+                category="physical",
             )
         ]
 
@@ -38,13 +45,28 @@ async def build_pokemon(slot: StoredSlot) -> PokemonBattleState:
         name=slot.species_name or f"#{slot.pokemon_id}",
         current_hp=hp_stat,
         max_hp=hp_stat,
-        attack=calc_stat(b.attack, iv.attack, ev.attack),
-        defense=calc_stat(b.defense, iv.defense, ev.defense),
-        special_attack=calc_stat(b.special_attack, iv.special_attack, ev.special_attack),
-        special_defense=calc_stat(b.special_defense, iv.special_defense, ev.special_defense),
-        speed=calc_stat(b.speed, iv.speed, ev.speed),
+        attack=calc_stat(b.attack, iv.attack, ev.attack, nature=nature, stat_name="attack"),
+        defense=calc_stat(b.defense, iv.defense, ev.defense, nature=nature, stat_name="defense"),
+        special_attack=calc_stat(
+            b.special_attack,
+            iv.special_attack,
+            ev.special_attack,
+            nature=nature,
+            stat_name="special_attack",
+        ),
+        special_defense=calc_stat(
+            b.special_defense,
+            iv.special_defense,
+            ev.special_defense,
+            nature=nature,
+            stat_name="special_defense",
+        ),
+        speed=calc_stat(b.speed, iv.speed, ev.speed, nature=nature, stat_name="speed"),
         types=slot.types or ["normal"],
         moves=moves,
+        ability=(slot.ability or "").lower(),
+        item=(slot.item or "").lower(),
+        nature=nature,
     )
 
 

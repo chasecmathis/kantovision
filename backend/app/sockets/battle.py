@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from app.battle.manager import get_battle_by_user
 from app.battle.matchmaking import is_queued
+from app.battle.state import BattleStatus
 from app.dependencies import UserIdDep
 from app.sockets.caches import pop_recent_battle_end
 from app.sockets.connections import manager
@@ -18,7 +19,9 @@ from app.sockets.handlers import (
     handle_forfeit,
     handle_join_queue,
     handle_leave_queue,
-    handle_make_move,
+    handle_make_action,
+    handle_select_lead,
+    handle_submit_switch,
 )
 from app.sockets.message_types import (
     MSG_BATTLE_END,
@@ -28,9 +31,12 @@ from app.sockets.message_types import (
     MSG_FORFEIT,
     MSG_JOIN_QUEUE,
     MSG_LEAVE_QUEUE,
-    MSG_MAKE_MOVE,
+    MSG_MAKE_ACTION,
     MSG_OPPONENT_RECONNECTED,
     MSG_QUEUE_JOINED,
+    MSG_SELECT_LEAD,
+    MSG_SUBMIT_SWITCH,
+    MSG_TEAM_PREVIEW,
 )
 from app.sockets.rate_limiter import clear_user, is_rate_limited
 from app.sockets.serializers import serialize_battle_state
@@ -99,15 +105,25 @@ async def battle_ws(
             )
         else:
             # Fresh connect with an existing battle (e.g. page refresh mid-match)
-            await manager.send_to_user(
-                user_id,
-                {
-                    "type": MSG_BATTLE_START,
-                    "battle_id": existing.id,
-                    "state": serialize_battle_state(existing),
-                    "turn_started_at": get_turn_started_at(existing.id) or time.time(),
-                },
-            )
+            if existing.status == BattleStatus.TEAM_PREVIEW:
+                await manager.send_to_user(
+                    user_id,
+                    {
+                        "type": MSG_TEAM_PREVIEW,
+                        "battle_id": existing.id,
+                        "state": serialize_battle_state(existing),
+                    },
+                )
+            else:
+                await manager.send_to_user(
+                    user_id,
+                    {
+                        "type": MSG_BATTLE_START,
+                        "battle_id": existing.id,
+                        "state": serialize_battle_state(existing),
+                        "turn_started_at": get_turn_started_at(existing.id) or time.time(),
+                    },
+                )
     else:
         recent_end = pop_recent_battle_end(user_id)
         if recent_end:
@@ -141,10 +157,14 @@ async def battle_ws(
                 await handle_join_queue(user_id, data)
             elif msg_type == MSG_LEAVE_QUEUE:
                 await handle_leave_queue(user_id)
-            elif msg_type == MSG_MAKE_MOVE:
-                await handle_make_move(user_id, data)
+            elif msg_type == MSG_MAKE_ACTION:
+                await handle_make_action(user_id, data)
             elif msg_type == MSG_FORFEIT:
                 await handle_forfeit(user_id, data)
+            elif msg_type == MSG_SELECT_LEAD:
+                await handle_select_lead(user_id, data)
+            elif msg_type == MSG_SUBMIT_SWITCH:
+                await handle_submit_switch(user_id, data)
             else:
                 await manager.send_to_user(
                     user_id,

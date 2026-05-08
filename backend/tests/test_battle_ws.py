@@ -23,6 +23,37 @@ async def _mock_save_result(state):
     pass
 
 
+def _start_battle(ws1, ws2):
+    """Helper: join queue, match, select leads, return battle_id."""
+    ws1.send_json({"type": "join_queue", "team_id": "team-1"})
+    ws1.receive_json()  # queue_joined
+
+    ws2.send_json({"type": "join_queue", "team_id": "team-2"})
+
+    # Both get match_found + team_preview
+    ws2.receive_json()  # match_found
+    preview2 = ws2.receive_json()  # team_preview
+    assert preview2["type"] == "team_preview"
+    battle_id = preview2["battle_id"]
+
+    ws1.receive_json()  # match_found
+    ws1.receive_json()  # team_preview
+
+    # Both select leads
+    ws1.send_json({"type": "select_lead", "battle_id": battle_id, "lead_index": 0})
+    ws1.receive_json()  # move_received broadcast
+    ws2.receive_json()  # move_received broadcast (both players get it)
+    ws2.send_json({"type": "select_lead", "battle_id": battle_id, "lead_index": 0})
+
+    # Both get battle_start
+    start1 = ws1.receive_json()
+    start2 = ws2.receive_json()
+    assert start1["type"] == "battle_start"
+    assert start2["type"] == "battle_start"
+
+    return battle_id
+
+
 @pytest.fixture
 def ws_app(monkeypatch):
     """App fixture with DB calls mocked to avoid Supabase client initialization."""
@@ -135,23 +166,33 @@ class TestMatchmakingFlow:
                     # P2 joins — triggers match
                     ws2.send_json({"type": "join_queue", "team_id": "team-2"})
 
-                    # P2 gets match_found then battle_start
+                    # P2 gets match_found then team_preview
                     msg = ws2.receive_json()
                     assert msg["type"] == "match_found"
                     assert msg["opponent_id"] == TEST_USER_1
 
                     msg = ws2.receive_json()
-                    assert msg["type"] == "battle_start"
+                    assert msg["type"] == "team_preview"
                     assert "state" in msg
 
-                    # P1 also gets match_found then battle_start
+                    # P1 also gets match_found then team_preview
                     msg = ws1.receive_json()
                     assert msg["type"] == "match_found"
                     assert msg["opponent_id"] == TEST_USER_2
 
                     msg = ws1.receive_json()
-                    assert msg["type"] == "battle_start"
+                    assert msg["type"] == "team_preview"
                     assert "state" in msg
+
+    def test_lead_selection_starts_battle(self, ws_app):
+        ticket1 = issue_ticket(TEST_USER_1)
+        ticket2 = issue_ticket(TEST_USER_2)
+
+        with TestClient(ws_app) as client:
+            with client.websocket_connect(f"/ws/battle?ticket={ticket1}") as ws1:
+                with client.websocket_connect(f"/ws/battle?ticket={ticket2}") as ws2:
+                    battle_id = _start_battle(ws1, ws2)
+                    assert battle_id is not None
 
     def test_battle_state_contains_both_players(self, ws_app):
         ticket1 = issue_ticket(TEST_USER_1)
@@ -165,9 +206,9 @@ class TestMatchmakingFlow:
 
                     ws2.send_json({"type": "join_queue", "team_id": "team-2"})
                     ws2.receive_json()  # match_found
-                    battle_start = ws2.receive_json()
+                    preview = ws2.receive_json()  # team_preview
 
-                    state = battle_start["state"]
+                    state = preview["state"]
                     player_ids = {state["player1"]["user_id"], state["player2"]["user_id"]}
                     assert TEST_USER_1 in player_ids
                     assert TEST_USER_2 in player_ids
@@ -184,17 +225,7 @@ class TestForfeit:
         with TestClient(ws_app) as client:
             with client.websocket_connect(f"/ws/battle?ticket={ticket1}") as ws1:
                 with client.websocket_connect(f"/ws/battle?ticket={ticket2}") as ws2:
-                    # Start a match
-                    ws1.send_json({"type": "join_queue", "team_id": "team-1"})
-                    ws1.receive_json()  # queue_joined
-                    ws2.send_json({"type": "join_queue", "team_id": "team-2"})
-
-                    # Consume match_found + battle_start for both players
-                    ws2.receive_json()  # match_found
-                    battle_start = ws2.receive_json()  # battle_start
-                    battle_id = battle_start["battle_id"]
-                    ws1.receive_json()  # match_found
-                    ws1.receive_json()  # battle_start
+                    battle_id = _start_battle(ws1, ws2)
 
                     # P1 forfeits
                     ws1.send_json({"type": "forfeit", "battle_id": battle_id})
@@ -221,18 +252,16 @@ class TestMakeMove:
         with TestClient(ws_app) as client:
             with client.websocket_connect(f"/ws/battle?ticket={ticket1}") as ws1:
                 with client.websocket_connect(f"/ws/battle?ticket={ticket2}") as ws2:
-                    ws1.send_json({"type": "join_queue", "team_id": "team-1"})
-                    ws1.receive_json()  # queue_joined
-                    ws2.send_json({"type": "join_queue", "team_id": "team-2"})
-
-                    ws2.receive_json()  # match_found
-                    ws2.receive_json()  # battle_start
-                    ws1.receive_json()  # match_found
-                    battle_start = ws1.receive_json()  # battle_start
-                    battle_id = battle_start["battle_id"]
+                    battle_id = _start_battle(ws1, ws2)
 
                     # P1 submits a move
-                    ws1.send_json({"type": "make_move", "battle_id": battle_id, "move_slot": 0})
+                    ws1.send_json(
+                        {
+                            "type": "make_action",
+                            "battle_id": battle_id,
+                            "action": {"type": "move", "move_index": 0},
+                        }
+                    )
 
                     # The room gets a move_received broadcast
                     msg = ws1.receive_json()
@@ -246,22 +275,26 @@ class TestMakeMove:
         with TestClient(ws_app) as client:
             with client.websocket_connect(f"/ws/battle?ticket={ticket1}") as ws1:
                 with client.websocket_connect(f"/ws/battle?ticket={ticket2}") as ws2:
-                    ws1.send_json({"type": "join_queue", "team_id": "team-1"})
-                    ws1.receive_json()
-                    ws2.send_json({"type": "join_queue", "team_id": "team-2"})
+                    battle_id = _start_battle(ws1, ws2)
 
-                    ws2.receive_json()  # match_found
-                    ws2.receive_json()  # battle_start
-                    ws1.receive_json()  # match_found
-                    battle_start = ws1.receive_json()  # battle_start
-                    battle_id = battle_start["battle_id"]
-
-                    ws1.send_json({"type": "make_move", "battle_id": battle_id, "move_slot": 0})
+                    ws1.send_json(
+                        {
+                            "type": "make_action",
+                            "battle_id": battle_id,
+                            "action": {"type": "move", "move_index": 0},
+                        }
+                    )
                     # move_received broadcast goes to both players
                     ws1.receive_json()  # move_received (from ws1's perspective)
                     ws2.receive_json()  # move_received (from ws2's perspective)
 
-                    ws2.send_json({"type": "make_move", "battle_id": battle_id, "move_slot": 0})
+                    ws2.send_json(
+                        {
+                            "type": "make_action",
+                            "battle_id": battle_id,
+                            "action": {"type": "move", "move_index": 0},
+                        }
+                    )
 
                     # Both players receive turn_result
                     turn1 = ws1.receive_json()

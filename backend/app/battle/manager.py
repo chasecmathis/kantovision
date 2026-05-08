@@ -53,13 +53,13 @@ def _reset_for_testing() -> None:
     _user_battle.clear()
 
 
-def submit_move(battle_id: str, user_id: str, move_slot: int) -> bool:
+def submit_action(battle_id: str, user_id: str, action: dict) -> bool:
     """
-    Record a player's chosen move slot.
+    Record a player's chosen action (move or switch).
     Returns True when both players have submitted and the turn is ready to resolve.
     """
     state = _battles.get(battle_id)
     if not state or state.status != BattleStatus.ACTIVE:
         return False
-    state.pending_moves[user_id] = move_slot
-    return len(state.pending_moves) == 2
+    state.pending_actions[user_id] = action
+    return len(state.pending_actions) == 2

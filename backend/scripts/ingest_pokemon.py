@@ -522,11 +522,13 @@ async def ingest_pokemon_varieties(
         default_var = next((v for v in varieties if v.get("is_default", False)), None)
         default_pokemon_name = default_var["pokemon"]["name"] if default_var else species_name
 
-        multi_form_species.append({
-            "species_id": species_id,
-            "species_name": species_name,
-            "default_pokemon_name": default_pokemon_name,
-        })
+        multi_form_species.append(
+            {
+                "species_id": species_id,
+                "species_name": species_name,
+                "default_pokemon_name": default_pokemon_name,
+            }
+        )
         for v in varieties:
             form_name: str = v["pokemon"]["name"]
             if not v.get("is_default", False) and form_name not in seen_form_names:

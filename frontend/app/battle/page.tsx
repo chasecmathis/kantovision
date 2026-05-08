@@ -4,9 +4,11 @@ import { Trophy, Frown, Flag, AlertTriangle } from "lucide-react";
 import { useBattleWS } from "@/src/hooks/useBattleWS";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { MatchmakingLobby } from "@/src/components/battle/MatchmakingLobby";
+import { TeamPreview } from "@/src/components/battle/TeamPreview";
 import { BattleField } from "@/src/components/battle/BattleField";
 import { BattleLog } from "@/src/components/battle/BattleLog";
 import { ActionPanel } from "@/src/components/battle/ActionPanel";
+import { ForcedSwitchOverlay } from "@/src/components/battle/ForcedSwitchOverlay";
 import Link from "next/link";
 
 export default function BattlePage() {
@@ -22,10 +24,14 @@ export default function BattlePage() {
     opponentDisconnectMessage,
     serverShuttingDown,
     turnStartedAt,
+    forcedSwitchOptions,
     connect,
     joinQueue,
     leaveQueue,
+    selectLead,
     makeMove,
+    switchPokemon,
+    submitSwitch,
     forfeit,
     disconnect,
   } = useBattleWS();
@@ -126,13 +132,50 @@ export default function BattlePage() {
     );
   }
 
+  // ── Team preview view ─────────────────────────────────────────────────────
+  if (phase === "team_preview" && battleState && myUserId) {
+    const isP1 = battleState.player1.user_id === myUserId;
+    const myTeam = isP1 ? battleState.player1.team : battleState.player2.team;
+    const opponentTeam = isP1 ? battleState.player2.team : battleState.player1.team;
+
+    return (
+      <div>
+        {serverShuttingDown && (
+          <div className="max-w-[1400px] mx-auto px-6">
+            <div
+              className="mt-6 px-4 py-2.5 rounded-lg border flex items-center gap-2.5 text-xs animate-fade-in"
+              style={{
+                borderColor: "rgba(251,146,60,0.35)",
+                backgroundColor: "rgba(251,146,60,0.08)",
+                color: "#fb923c",
+                fontFamily: "var(--font-dm-sans)",
+              }}
+            >
+              <AlertTriangle size={13} className="shrink-0" />
+              <span>Server is restarting — your current battle may be interrupted.</span>
+            </div>
+          </div>
+        )}
+        <TeamPreview
+          myTeam={myTeam}
+          opponentTeam={opponentTeam}
+          waitingForOpponent={waitingForOpponent}
+          onSelectLead={selectLead}
+        />
+      </div>
+    );
+  }
+
   // ── Active battle view ─────────────────────────────────────────────────────
   if ((phase === "active" || phase === "matched") && battleState && myUserId) {
-    const myPlayer =
-      battleState.player1.user_id === myUserId ? battleState.player1 : battleState.player2;
-    const opponentPlayer =
-      battleState.player1.user_id === myUserId ? battleState.player2 : battleState.player1;
+    const isP1 = battleState.player1.user_id === myUserId;
+    const myPlayer = isP1 ? battleState.player1 : battleState.player2;
+    const opponentPlayer = isP1 ? battleState.player2 : battleState.player1;
+    const mySide = isP1 ? battleState.side1 : battleState.side2;
+    const opponentSide = isP1 ? battleState.side2 : battleState.side1;
     const myActiveMon = myPlayer.team[myPlayer.active_index];
+
+    const needsForcedSwitch = forcedSwitchOptions !== null;
 
     return (
       <div className="max-w-[1400px] mx-auto px-6 py-6 flex flex-col gap-4 min-h-[calc(100vh-64px)]">
@@ -167,28 +210,30 @@ export default function BattlePage() {
           </div>
         )}
 
+        {/* Turn transition pulse */}
+        <div
+          key={`turn-${battleState.turn}`}
+          className="fixed inset-0 pointer-events-none z-50"
+          style={{
+            backgroundColor: "rgba(108,99,255,0.06)",
+            animation: "turnPulse 0.4s ease-out forwards",
+          }}
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <p
-              className="text-xs text-text-muted tracking-[0.3em] mb-1"
-              style={{ fontFamily: "var(--font-jetbrains)" }}
-            >
-              {'// BATTLE'}
-            </p>
-            <h1
-              className="text-2xl font-black text-text-primary tracking-tight"
-              style={{ fontFamily: "var(--font-unbounded)" }}
-            >
-              TURN {battleState.turn}
-            </h1>
-          </div>
+          <p
+            className="text-[10px] text-text-muted tracking-[0.3em]"
+            style={{ fontFamily: "var(--font-jetbrains)" }}
+          >
+            {'// BATTLE'}
+          </p>
           <button
             onClick={forfeit}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-bg-border bg-bg-elevated text-text-muted hover:text-red-400 hover:border-red-500/30 text-xs transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-bg-border bg-bg-elevated/50 text-text-muted hover:text-red-400 hover:border-red-500/30 text-[10px] transition-all"
             style={{ fontFamily: "var(--font-dm-sans)" }}
           >
-            <Flag size={12} />
+            <Flag size={10} />
             Forfeit
           </button>
         </div>
@@ -197,20 +242,34 @@ export default function BattlePage() {
         <BattleField
           myPlayer={myPlayer}
           opponentPlayer={opponentPlayer}
+          mySide={mySide}
+          opponentSide={opponentSide}
           turn={battleState.turn}
+          field={battleState.field}
         />
 
-        {/* Bottom: log + actions */}
+        {/* Bottom: log + actions or forced switch */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <BattleLog entries={log} />
-          <ActionPanel
-            moves={myActiveMon?.moves ?? []}
-            disabled={myActiveMon?.fainted}
-            waitingForOpponent={waitingForOpponent}
-            onSelectMove={makeMove}
-            turnKey={battleState.turn}
-            turnStartedAt={turnStartedAt}
-          />
+          {needsForcedSwitch ? (
+            <ForcedSwitchOverlay
+              team={myPlayer.team}
+              options={forcedSwitchOptions}
+              onSubmitSwitch={submitSwitch}
+            />
+          ) : (
+            <ActionPanel
+              moves={myActiveMon?.moves ?? []}
+              team={myPlayer.team}
+              activeIndex={myPlayer.active_index}
+              disabled={myActiveMon?.fainted}
+              waitingForOpponent={waitingForOpponent}
+              onSelectMove={makeMove}
+              onSelectSwitch={switchPokemon}
+              turnKey={battleState.turn}
+              turnStartedAt={turnStartedAt}
+            />
+          )}
         </div>
       </div>
     );

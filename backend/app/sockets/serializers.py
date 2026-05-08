@@ -10,9 +10,12 @@ def _ser_move(m: MoveSlot) -> dict:
         "name": m.name,
         "power": m.power,
         "accuracy": m.accuracy,
-        "pp": m.pp,
+        "max_pp": m.max_pp,
+        "current_pp": m.current_pp,
         "type": m.type,
         "category": m.category,
+        "priority": m.priority,
+        "flags": m.flags,
     }
 
 
@@ -30,6 +33,12 @@ def _ser_mon(m: PokemonBattleState) -> dict:
         "types": m.types,
         "moves": [_ser_move(mv) for mv in m.moves],
         "fainted": m.fainted,
+        "ability": m.ability,
+        "item": m.item,
+        "nature": m.nature,
+        "status": m.status,
+        "stat_stages": m.stat_stages.model_dump(),
+        "volatile_statuses": sorted(m.volatile_statuses),
     }
 
 
@@ -51,4 +60,8 @@ def serialize_battle_state(state: BattleState) -> dict:
         "status": state.status,
         "winner_id": state.winner_id,
         "log": state.log[-30:],
+        "field": state.field.model_dump(),
+        "side1": state.side1.model_dump(),
+        "side2": state.side2.model_dump(),
+        "awaiting_switch": sorted(state.awaiting_switch),
     }

@@ -53,16 +53,16 @@ def classify_image(file: UploadFile, _user: UserIdDep) -> ClassifyResponse:
     except Exception:
         logger.exception("Failed to load classifier model")
         raise HTTPException(
-            status_code=503, 
-            detail="Classifier model is loading, try again shortly")
+            status_code=503, detail="Classifier model is loading, try again shortly"
+        )
 
     try:
         predictions = classifier.predict(contents, top_k=5)
     except Exception:
         logger.exception("Inference failed")
         raise HTTPException(
-            status_code=400, 
-            detail="Could not process image. Ensure it is a valid image file.")
+            status_code=400, detail="Could not process image. Ensure it is a valid image file."
+        )
 
     return ClassifyResponse(
         predictions=[PredictionOut(name=p.name, confidence=p.confidence) for p in predictions]

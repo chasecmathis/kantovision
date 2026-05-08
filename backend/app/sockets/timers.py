@@ -37,9 +37,7 @@ def start_move_timeout(
     existing = _move_timeouts.pop(user_id, None)
     if existing:
         existing.cancel()
-    _move_timeouts[user_id] = asyncio.create_task(
-        _move_timeout(user_id, battle_id, on_forfeit)
-    )
+    _move_timeouts[user_id] = asyncio.create_task(_move_timeout(user_id, battle_id, on_forfeit))
 
 
 def start_turn_timers(
@@ -83,8 +81,8 @@ async def _move_timeout(
         state = get_battle(battle_id)
         if not state or state.status != BattleStatus.ACTIVE:
             return
-        if user_id in state.pending_moves:
-            return  # move was submitted; race condition, no-op
+        if user_id in state.pending_actions:
+            return  # action was submitted; race condition, no-op
         logger.info(
             "Move timeout for user_id=%s in battle_id=%s — auto-forfeiting", user_id, battle_id
         )

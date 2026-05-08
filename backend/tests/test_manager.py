@@ -5,7 +5,7 @@ from app.battle.manager import (
     get_battle,
     get_battle_by_user,
     remove_battle,
-    submit_move,
+    submit_action,
     update_battle,
 )
 from tests.helpers import make_pokemon, make_queue_entry
@@ -103,31 +103,38 @@ class TestRemoveBattle:
         remove_battle("not-a-real-id")
 
 
-class TestSubmitMove:
+class TestSubmitAction:
     def test_returns_false_after_first_submission(self):
         state = _make_battle("u1", "u2")
-        result = submit_move(state.id, "u1", 0)
+        result = submit_action(state.id, "u1", {"type": "move", "move_index": 0})
         assert result is False
 
     def test_returns_true_after_both_submit(self):
         state = _make_battle("u1", "u2")
-        submit_move(state.id, "u1", 0)
-        result = submit_move(state.id, "u2", 1)
+        submit_action(state.id, "u1", {"type": "move", "move_index": 0})
+        result = submit_action(state.id, "u2", {"type": "move", "move_index": 1})
         assert result is True
 
-    def test_move_stored_correctly(self):
+    def test_action_stored_correctly(self):
         state = _make_battle("u1", "u2")
-        submit_move(state.id, "u1", 2)
+        submit_action(state.id, "u1", {"type": "move", "move_index": 2})
         fetched = get_battle(state.id)
-        assert fetched.pending_moves["u1"] == 2
+        assert fetched.pending_actions["u1"]["move_index"] == 2
 
     def test_returns_false_for_unknown_battle(self):
-        result = submit_move("no-such-battle", "u1", 0)
+        result = submit_action("no-such-battle", "u1", {"type": "move", "move_index": 0})
         assert result is False
 
     def test_returns_false_for_ended_battle(self):
         state = _make_battle("u1", "u2")
         state.status = "ended"
         update_battle(state)
-        result = submit_move(state.id, "u1", 0)
+        result = submit_action(state.id, "u1", {"type": "move", "move_index": 0})
         assert result is False
+
+    def test_switch_action_stored(self):
+        state = _make_battle("u1", "u2")
+        submit_action(state.id, "u1", {"type": "switch", "switch_to_index": 1})
+        fetched = get_battle(state.id)
+        assert fetched.pending_actions["u1"]["type"] == "switch"
+        assert fetched.pending_actions["u1"]["switch_to_index"] == 1

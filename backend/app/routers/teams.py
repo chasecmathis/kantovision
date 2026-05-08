@@ -12,11 +12,7 @@ router = APIRouter(prefix="/teams", tags=["teams"])
 def list_teams(user: UserIdDep) -> list[TeamRow]:
     db = get_db()
     result = (
-        db.table("teams")
-        .select("*")
-        .eq("user_id", user)
-        .order("updated_at", desc=True)
-        .execute()
+        db.table("teams").select("*").eq("user_id", user).order("updated_at", desc=True).execute()
     )
     return result.data
 
